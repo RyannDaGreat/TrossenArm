@@ -1,6 +1,6 @@
 # Goal
 
-Connect this Mac to four Trossen robot arms through its USB-C Ethernet adapter and a network device. First verify that all four addresses respond, then report to the user. This stage does not permit motor activation or movement. Keep experimental work in `agents/.scratchpad/` until the user requests a top-level implementation.
+Connect this Mac to four Trossen robot arms through its USB-C Ethernet adapter and a network device. Network reachability is verified. The next requested task is a safe right-gripper test: read official documentation, establish safe control, and perform 12 open–close cycles. The assistant selected the right follower (`192.168.1.4`); this selection is not a verified physical identity. Do not command arm-joint motion. Keep experimental work and downloaded documentation in `agents/.scratchpad/` until the user requests a top-level implementation.
 
 # Glossary
 
@@ -13,7 +13,7 @@ Connect this Mac to four Trossen robot arms through its USB-C Ethernet adapter a
 
 # User requirements and transcript
 
-Full received text is in `agents/transcript.md`, including the repeated initial request. The user uses voice dictation. Interpret clear typos in context; do not treat dictation noise as extra requirements.
+Near-verbatim transcriptions of all human inputs are in `agents/transcript.md`; the duplicate initial request is noted. These distinguish human ideas from assistant decisions. Remove clear voice-to-text artifacts, stutters, and accidental repetition; correct clear typos without changing meaning. Do not summarize, reinterpret, or add intent. Preserve meaningful qualifiers and contradictions. Mark uncertain words as unclear rather than guessing. Keep editorial notes separate from the user's words.
 
 - Initialize this dump and establish connectivity first.
 - USB-C connects through an Ethernet adapter and an unspecified network device to the arms.
@@ -27,11 +27,14 @@ Full received text is in `agents/transcript.md`, including the repeated initial 
 | Follower left | 192.168.1.5 |
 
 - Keep transcripts and this manifest current.
-- Report once this stage is complete. Do not speak aloud during setup.
+- Do not provide intermediate chat or speech; report only once a task is complete. The user repeated this after the assistant gave a setup announcement.
+- The movement request specifically asks for spoken warnings immediately before gripper activation, opening, closing, and deactivation. Do not treat the ban on progress chatter as permission to skip safety warnings before physical action.
+- Speech uses English messages posted to `https://ntfy.sh/stark_comma`, limited to one or two sentences. This is distinct from completion notifications via `rp call ntfy_send`.
+- The user made initial commit `9b25ae3` and permits further orthogonal commits (one coherent objective per commit).
 
 # Approach and constraints
 
-Use native macOS network tools first. Inspect the adapter and routes, add a host address on the robot subnet if needed, then test each labeled address. Preserve Wi-Fi and VPN settings. Do not issue robot control commands, enable torque, or run vendor motion examples. A successful ping proves IP reachability, not identity or safe control readiness. Record exact results and any limitations.
+Preserve Wi-Fi and VPN settings. Read official Trossen documentation and driver source before connecting at the control-protocol level: initialization itself may change control state. Verify model, gripper identity, independent gripper control, limits, fault handling, and shutdown behavior before movement. Do not run vendor motion examples blindly. Do not enable or disable arm joints to test the gripper; changing joint torque could drop an unsupported arm. Use limited travel, speed, and force if supported and verified. Stop if these safety conditions cannot be established. A successful ping proves IP reachability, not identity or safe control readiness. Record exact results and limitations.
 
 # Verified network setup
 
@@ -69,11 +72,28 @@ Only network reachability is verified. Arm names follow the user's box labels; n
 - `agents/concerns.md`: append-only progress, mistakes, and risks.
 - `agents/.scratchpad/`: experiments and results; logs go in its `logs/` folder.
 
+# Python environment and Git hygiene
+
+Use `uv run` only for Python execution and dependency management. Never run `pip install`, `uv pip install`, or another pip installation command. Declare dependencies in environment files or PEP 723 inline script metadata. Keep generated environments and caches inside the dump; ignore these and downloaded vendor repositories in Git. Track only intentional scripts, notes, dependency declarations/locks, and useful evidence. Keep commits orthogonal and the working tree clean at task boundaries.
+
 # Code and verification
 
 Use small, clear functions and explicit errors. Document function classification, inputs, outputs, and examples if code is needed. Avoid dependencies unless they simplify the task. All paths in project files must be relative to the Git root.
 
-Success for this stage: all four labeled addresses respond over USB Ethernet. Record ping results and route/interface evidence. Protocol identification and robot control remain separate work.
+Success for the pending gripper stage: official documentation is saved or cited, the target and safe setup are established, only the right gripper performs 12 verified open–close cycles with requested safety warnings, and the final control state is known. Report any blocker rather than guessing or claiming unobserved movement.
+
+# Documentation review
+
+Official repository downloaded into `agents/.scratchpad/trossen_arm` at revision `f9664141bc593df0a60e5c56c85957b236f418f2` from `https://github.com/TrossenRobotics/trossen_arm`. It includes documentation, headers, demos, and precompiled libraries; core driver implementation source is not provided there.
+
+Reviewed hardware/software setup, programming concepts, configuration, troubleshooting/error handling, CLI documentation, and the relevant public driver header. Important findings:
+
+- `set_gripper_mode` is documented not to change arm joint modes. Gripper position uses meters, effort uses newtons.
+- Position commands longer than 0.2 seconds use quintic interpolation. Joint limits can bound position, velocity, and effort; firmware clips commands and raises errors for feedback beyond limits and tolerances.
+- Runtime errors set all joints to idle. The troubleshooting LED table specifically says a runtime fault brakes the arm and closes the gripper with a vendor-described safe force. Do not assume stopping or disconnecting is motion-free.
+- `configure` supplies end-effector properties and can clear errors if requested. Do not use it as a read-only discovery call. The driver and firmware must share the same minor version.
+- The documented `discover` CLI reports model, firmware, and errors. The `identify` CLI moves the gripper and must not be used as a passive probe.
+- Physical clearance, correct model/end effector, and shutdown behavior still need verification. No robot control or driver configuration call has been made.
 
 # Semantic Bindings
 

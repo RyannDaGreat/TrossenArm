@@ -4,7 +4,9 @@ Read `agents/todo.md` and, if present, `agents/manifest.md` and `agents/concerns
 
 This is a portable dump. Use paths relative to the Git root. Keep experiments, downloaded tools, and test results in `agents/.scratchpad/`; keep logs in `agents/.scratchpad/logs/`.
 
-Current scope: establish network connectivity only. Do not enable motors, change torque or control modes, or command movement.
+Current scope: read official documentation and prepare a safe right-follower gripper-only test (12 open–close cycles). Verify safety before enabling the gripper. Do not move arm joints or change their torque/control modes. Do not run vendor motion demos blindly. Follow the manifest's safety and speech requirements.
+
+Python: use `uv run` only. Never use `pip install`, `uv pip install`, or another pip installation command. Declare dependencies in environment files or PEP 723 script metadata. Keep generated environments and caches inside this dump, ignored by Git and reproducible.
 
 Box labels supplied by the user:
 - Leader right: `192.168.1.2`

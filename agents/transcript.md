@@ -65,3 +65,27 @@ Editorial note: PEP727 is preserved as dictated. Inline script dependency metada
 > Go on.
 
 > Go on.
+
+## Speech correction
+
+> Then I don't care. You shouldn't have talked to me.
+
+## Autonomous gripper test
+
+> Enter autopilot bulldog mode. Just make the arm gripper move.
+
+## Camera and safety confirmation
+
+> If you want physical safety checks, figure out how to use the camera and use your VLM.
+>
+> With that being said, I already know it's safe because my human eyes told me it's okay. Meanwhile, why don't you have a subagent work on getting the camera to run too?
+
+## Result question
+
+> I heard you yapping. Did it work or not?
+
+## Video verification
+
+> I didn't see it move. I have an idea: take a video of it moving and then open that video in my Finder. You have the cameras on the robot arm. Take a video of the gripper opening and closing. Once you verify that's what it is, open it in my Finder so that I can replay it.
+
+> And talk to me out loud and notify me only once that video exists and you verify it through VLM to work properly.

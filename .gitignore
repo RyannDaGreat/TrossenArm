@@ -8,3 +8,8 @@ agents/.scratchpad/uv-python/
 
 # Machine-specific command output; keep verified findings in agents/.
 agents/.scratchpad/logs/*.log
+
+# Local camera captures and derived video frames.
+agents/.scratchpad/*.png
+agents/.scratchpad/*.mp4
+agents/.scratchpad/frames/

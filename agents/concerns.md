@@ -40,3 +40,18 @@
 - `uv run --python 3.12 --locked agents/.scratchpad/scratchpad.py` passed using dump-local cache/runtime paths. It imports the driver and checks API names; no driver instance is created and no robot is contacted.
 - Verified `.gitignore` covers vendor checkout, both environment locations, Python runtime downloads, uv cache, bytecode, and logs. Intentional scratch code remains tracked.
 - Physical clearance, secure mounting, exact stock gripper identity, and operator access to power stop still need confirmation. No motion script or mode/configuration command was run. The gripper test is blocked on these physical checks and on a safe driver lifecycle, not on package installation.
+
+## 2026-10-28 20:14 - First live connection aborted without motion
+
+- The user reports a visual safety check and authorizes proceeding in autopilot and bulldog modes. Requested a parallel camera investigation.
+- The first test configured the matching follower driver at `.4`, with `clear_error=False`. All seven joints reported idle, and controller error text was `No error`. A transient `Retransmission attempt 0 failed` warning was followed by valid telemetry.
+- Gripper position was `-0.0007360950112342834` meters. The strict nominal-bounds planner raised `ValueError("Gripper position/bounds do not allow the planned travel")`. No position mode or target was sent; no force or velocity limits were modified. Finally/cleanup left all joints idle and reported no error. Evidence: `agents/.scratchpad/logs/gripper-live.log`.
+- Root cause: initial planner treated nominal command bounds as exact feedback bounds. Vendor default configuration documents a 4 mm feedback tolerance. Revised planner accepts a measured offset only within both the actual factory tolerance and 1 mm, logs it, and commands the nearest valid boundary. It never widens limits or changes calibration. Revised behavior is offline-tested only so far.
+- User objected to hearing announcements without visible motion. New requirement: speak and notify only after a real video exists and VLM inspection verifies opening and closing. Removed network speech from the motion script; action logs remain visible.
+
+## 2026-10-28 20:20 - Camera inspection and recording blocker
+
+- Camera delegate `del_mvssdd85_7gvy` completed successfully. Only MacBook Pro Camera (`0:none`) and virtual Desk View (`1:none`) are available. Index 2 is desktop capture and is not used.
+- Main-agent captures succeeded. VLM inspection of `agents/.scratchpad/camera-still.png` and `agents/.scratchpad/camera-current.png` shows only a cropped arm segment, without visible gripper jaws. `agents/.scratchpad/desk-view-still.png` is obstructed by a close dark surface/cables. These frames cannot verify opening and closing.
+- USB enumeration shows the TP-Link Ethernet adapter but no robot camera or camera USB hub. The vendor guide identifies kit cameras as USB Intel RealSense D405 devices, separate from Ethernet-controlled arms. Hardware connection or camera repositioning is required; software cannot fix absent devices or unseen jaws.
+- No motion retry, video-success claim, Finder reveal, speech, or completion notification was made after the new video requirement.

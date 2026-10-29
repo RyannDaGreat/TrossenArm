@@ -61,7 +61,7 @@ Restore its original DHCP configuration when no longer using the robot network:
 networksetup -setdhcp 'USB 10/100/1000 LAN'
 ```
 
-Only network reachability is verified. Arm names follow the user's box labels; no vendor protocol, model identity, motor activation, or movement was tested.
+Network reachability and vendor discovery are verified. Discovery reports model `wxai_v0`, firmware `1.8.4`, and no errors on all four controllers. Physical arm names still follow the user's box labels. Motor activation and movement have not been tested.
 
 # Files
 
@@ -70,7 +70,10 @@ Only network reachability is verified. Arm names follow the user's box labels; n
 - `agents/transcript.md`: user messages.
 - `agents/manifest.md`: current goal, requirements, design, and results.
 - `agents/concerns.md`: append-only progress, mistakes, and risks.
-- `agents/.scratchpad/`: experiments and results; logs go in its `logs/` folder.
+- `pyproject.toml` and `uv.lock`: root-level dependency declaration and pinned resolution.
+- `.gitignore`: generated environments, caches, downloads, and logs excluded from Git.
+- `agents/.scratchpad/scratchpad.py`: offline driver import/API check; no driver instance or robot connection.
+- `agents/.scratchpad/`: experiments and downloaded documentation; logs go in its `logs/` folder. Keep project notes here in the manifest, not in a separate notes file.
 
 # Python environment and Git hygiene
 
@@ -84,7 +87,7 @@ Success for the pending gripper stage: official documentation is saved or cited,
 
 # Documentation review
 
-Official repository downloaded into `agents/.scratchpad/trossen_arm` at revision `f9664141bc593df0a60e5c56c85957b236f418f2` from `https://github.com/TrossenRobotics/trossen_arm`. It includes documentation, headers, demos, and precompiled libraries; core driver implementation source is not provided there.
+Official repository: `https://github.com/TrossenRobotics/trossen_arm`, downloaded into `agents/.scratchpad/trossen_arm`. Current checkout is tag `v1.8.8`, revision `084ef0a74d3e6b71d640ac9907e4b48e04efcdcf`, matching the controllers' minor version. It includes documentation, headers, demos, and precompiled libraries; core driver implementation source is not provided there.
 
 Reviewed hardware/software setup, programming concepts, configuration, troubleshooting/error handling, CLI documentation, and the relevant public driver header. Important findings:
 
@@ -93,7 +96,39 @@ Reviewed hardware/software setup, programming concepts, configuration, troublesh
 - Runtime errors set all joints to idle. The troubleshooting LED table specifically says a runtime fault brakes the arm and closes the gripper with a vendor-described safe force. Do not assume stopping or disconnecting is motion-free.
 - `configure` supplies end-effector properties and can clear errors if requested. Do not use it as a read-only discovery call. The driver and firmware must share the same minor version.
 - The documented `discover` CLI reports model, firmware, and errors. The `identify` CLI moves the gripper and must not be used as a passive probe.
-- Physical clearance, correct model/end effector, and shutdown behavior still need verification. No robot control or driver configuration call has been made.
+- A vendor discovery probe returned all four controllers as `wxai_v0`, firmware `1.8.4`, `No error`. Discovery used driver 1.11.0 without configuration or motion. Control must instead use a matching 1.8.x driver; never upgrade controller firmware just to match the newest package.
+- Dependencies are declared in root-level `pyproject.toml`, with root-level `uv.lock`: Python 3.12 and `trossen-arm==1.8.8` (this driver version supplies wheels for Python 3.10–3.12). `uv run` resolves the environment and writes `uv.lock`; generated caches and environments are ignored.
+- Before control, obtain confirmation that `192.168.1.4` is the intended right follower with the stock follower gripper, the arm is mounted securely, the gripper is empty and unobstructed, and the operator can safely cut power if needed. These physical facts cannot be established by a network probe.
+- The v1.8.8 gripper demo states that the driver destructor sets modes to idle. Runtime-error closure is also documented in v1.8.8. Do not promise untouched joint modes during cleanup or an electrically powered-off gripper. No driver configuration or motion call has been made.
+
+## Reproduce the environment and documentation
+
+Run from the Git root. Use `uv run` only; recreate generated environments after moving the dump.
+
+```sh
+UV_CACHE_DIR=agents/.scratchpad/uv-cache \
+UV_PYTHON_INSTALL_DIR=agents/.scratchpad/uv-python \
+uv run --python 3.12 --locked agents/.scratchpad/scratchpad.py
+```
+
+The offline check imports the pinned driver and verifies the API names and follower preset; it does not create a driver instance or send network commands.
+
+Official versioned documentation: https://docs.trossenrobotics.com/trossen_arm/v1.8/
+
+If the ignored vendor checkout is absent:
+
+```sh
+git clone --depth 1 --branch v1.8.8 \
+  https://github.com/TrossenRobotics/trossen_arm.git \
+  agents/.scratchpad/trossen_arm
+```
+
+Key evidence within `agents/.scratchpad/trossen_arm/`:
+
+- `docs/troubleshooting.rst`: matching minor versions; runtime faults brake arm joints and close the gripper.
+- `docs/getting_started/configuration.rst`: matching end effectors, limit clipping, and fault thresholds.
+- `include/libtrossen_arm/trossen_arm.hpp`: gripper-only commands, mode and limit APIs, and cleanup declaration.
+- `demos/python/gripper_torque.py`: destructor sets modes to idle. Its 20–100 N demo commands are not suitable for a gentle first test and must not be run blindly.
 
 # Semantic Bindings
 

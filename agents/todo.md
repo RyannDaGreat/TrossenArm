@@ -2,14 +2,15 @@
 
 ## Environment and Git cleanup
 
-- [ ] Replace the pip-installed scratch environment with `uv run` and declared dependencies.
-- [ ] Ignore generated caches/vendor downloads and commit intentional work by objective.
+- [x] Move `pyproject.toml` and `uv.lock` to the root; verify the `uv run` environment.
+- [x] Merge the separate notes into the manifest and remove the redundant file.
+- [x] Ignore generated caches/vendor downloads and commit intentional work by objective.
 
 ## Right gripper test
 
 - [x] Download and read official safety and control documentation and public driver headers.
-- [ ] Verify initialization and shutdown behavior; core driver implementation is distributed as a binary.
-- [ ] Establish the exact target, safe gripper-only control, and required physical safety checks.
+- [ ] Resolve safe initialization and shutdown: documented destructor changes modes, and runtime faults can close the gripper; core implementation is a binary.
+- [ ] Await physical confirmation: right follower `.4`, stock gripper, arm mounted securely, gripper empty/clear, operator able to stop power. Then establish safe gripper-only control.
 - [ ] Implement and test a limited-motion script offline before hardware use.
 - [ ] With safety checks satisfied, warn before physical actions and verify 12 open–close cycles.
 - [ ] Record results and make orthogonal commits.

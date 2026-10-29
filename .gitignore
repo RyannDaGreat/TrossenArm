@@ -1,0 +1,10 @@
+# Recreated from tracked dependency metadata and vendor revision notes.
+agents/.scratchpad/python/
+agents/.scratchpad/trossen_arm/
+agents/.scratchpad/uv-cache/
+agents/.scratchpad/uv-python/
+**/.venv/
+**/__pycache__/
+
+# Machine-specific command output; keep verified findings in agents/.
+agents/.scratchpad/logs/*.log

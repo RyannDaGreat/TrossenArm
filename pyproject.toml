@@ -1,0 +1,9 @@
+[project]
+name = "trossen-gripper-scratchpad"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["trossen-arm==1.8.8"]
+
+[tool.uv]
+package = false
+cache-dir = "agents/.scratchpad/uv-cache"

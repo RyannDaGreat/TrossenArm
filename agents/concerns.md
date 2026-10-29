@@ -30,3 +30,13 @@
 - Found an important risk: the vendor says a runtime fault brakes the arm and closes the gripper. Generic idle/cleanup must not be described as a guaranteed motion-free power-off.
 - Ran `uv pip install --target agents/.scratchpad/python 'trossen-arm[cli]'`, installing version 1.11.0 and dependencies only in the dump. The user explicitly forbids all pip-install commands, including `uv pip install`, and requires `uv run`. This installation method will not be used again. Remove that generated target and replace it with declared dependencies resolved by `uv run`.
 - The user flagged messy Git state. Cause: pending documentation edits, untracked logs, and large downloaded/generated dependency directories. Track intentional work in coherent commits; ignore reproducible caches, environments, and vendor checkout. No robot control command has been issued.
+
+## 2026-10-28 20:05 - Root environment and documentation consolidation
+
+- Vendor discovery reported all four controllers as `wxai_v0`, firmware `1.8.4`, with no errors. Switched the ignored vendor checkout to `v1.8.8`, revision `084ef0a74d3e6b71d640ac9907e4b48e04efcdcf`, and pinned Python driver 1.8.8 to match the controller minor version.
+- The driver 1.8.8 wheel is not available for Python 3.13; resolved the environment with Python 3.12.13. Corrected the offline API check from nonexistent `get_joint_modes` to documented `get_modes`. The check now passes.
+- Removed the pip-installed target. The environment is now managed only through `uv run`, with root-level `pyproject.toml` and `uv.lock` as requested. Recreated the root `.venv` and removed the superseded scratch `.venv`.
+- The separate scratch notes file duplicated the manifest and violated the user's intended structure. Moved its unique reproduction instructions and evidence references into `agents/manifest.md`, then deleted the redundant file.
+- `uv run --python 3.12 --locked agents/.scratchpad/scratchpad.py` passed using dump-local cache/runtime paths. It imports the driver and checks API names; no driver instance is created and no robot is contacted.
+- Verified `.gitignore` covers vendor checkout, both environment locations, Python runtime downloads, uv cache, bytecode, and logs. Intentional scratch code remains tracked.
+- Physical clearance, secure mounting, exact stock gripper identity, and operator access to power stop still need confirmation. No motion script or mode/configuration command was run. The gripper test is blocked on these physical checks and on a safe driver lifecycle, not on package installation.

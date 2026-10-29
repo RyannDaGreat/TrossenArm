@@ -9,6 +9,16 @@ import numpy as np
 import robot_camera
 
 assert doctest.testmod(robot_camera).failed == 0
+cameras = [{"serial": "left", "index": 1201}, {"serial": "right", "index": 1200}]
+assert robot_camera.select_camera(cameras, "right")["index"] == 1200
+cameras.reverse()
+assert robot_camera.select_camera(cameras, "right")["index"] == 1200
+from record_gripper import sing_after_motion
+with patch("record_gripper.subprocess.run") as post:
+    sing_after_motion()
+    post.assert_called_once()
+    assert "Yankee Doodle" in post.call_args.args[0][-2]
+print("PASS: explicit serial independent of enumeration order; speech request mocked.")
 for platform in ("linux", "win32"):
     sdk = Mock()
     device = Mock()

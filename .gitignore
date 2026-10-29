@@ -16,3 +16,15 @@ agents/.scratchpad/logs/*.log
 agents/.scratchpad/*.png
 agents/.scratchpad/*.mp4
 agents/.scratchpad/frames/
+agents/.scratchpad/upright-test/
+agents/.scratchpad/*-motion/
+agents/.scratchpad/upright-approval.txt
+agents/.scratchpad/upright-status.json
+agents/.scratchpad/upright-plan.json
+agents/.scratchpad/upright-stage-*.png
+
+# Rebuilt frontend artifacts and local browser-test output.
+**/node_modules/
+web/source/frontend/dist/
+agents/.scratchpad/browser-profile/
+agents/.scratchpad/*-verification.json

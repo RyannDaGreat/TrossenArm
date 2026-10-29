@@ -1,39 +1,38 @@
-# TODO
+# TODO — laptop shutdown checkpoint
 
-## Active monitoring
+## Shutdown
 
-- [ ] Continue read-only babysitting until the user stops it. No capture/control job remains running after the successful test. Do not repeat motion or success notifications.
+- [x] Stop the web server, all camera/robot owners, and monitoring jobs; verify port 28347 has no listener.
+- [x] Record current state, failures, and remaining work. No delegates remain running.
+- [x] Final controller/API/FK offline checks passed; save source, motion experiments, and shutdown documentation as separate commits and verify the working tree.
+- [ ] On the next session, reconnect and inspect hardware before explicitly starting the server. Never auto-enable following.
 
-## Environment and Git cleanup
+## Next priority: reliable left-pair puppeteering
 
-- [x] Move `pyproject.toml` and `uv.lock` to the root; verify the `uv run` environment.
-- [x] Merge the separate notes into the manifest and remove the redundant file.
-- [x] Ignore generated caches/vendor downloads and commit intentional work by objective.
+- [x] Research vendor support and preserve one SDK owner for leader-left `.3` and follower-left `.5`.
+- [x] Add themed control modal, workspace acknowledgement, hands-free on/off toggle, heartbeat/session guards, and Stop button.
+- [x] Fix stop/rearm races, late-write checks, failed-driver reuse, peer stop ordering, and uncertain-stop reporting; pass mocked regressions and API tests.
+- [x] Replace unexplained range faults with per-joint clamping and exact boundary diagnostics; retain factory limits.
+- [x] Observe real user-driven follower movement, then a measured-velocity guard stop. Both left arms ended idle.
+- [ ] Live-test the final 60 ms interpolated-target change and numeric speed diagnostics. This adjustment is NOT yet physically verified; do not widen the guard just to force completion.
+- [ ] Complete a reliable supervised puppeteering trial and report actual outcome. Grippers remain unlinked in the current arm-only implementation.
 
-## Camera
+## Delivered
 
-- [x] Identify and connect the Intel RealSense D405 after the USB hub was plugged in.
-- [x] Implement model/USB-identity discovery on Mac and serial discovery on Windows/Linux; no saved port or OS index. Multiple matches fail explicitly.
-- [x] Verify Mac RGB capture and recording; Windows/Linux adapter tests pass with mocks, real hardware remains untested.
-- [x] Record 12 actual open–close cycles; verify the moving upper-left gripper through VLM inspection of decoded frames.
-- [x] Reveal `agents/.scratchpad/right-gripper-12-cycles-zoom.mp4` in Finder and confirm selection; speak and notify after verification.
+- [x] Portable Git dump, root pyproject/lock, uv-run-only environment, ignored caches/media/logs/generated builds.
+- [x] Reach all four robots; current nested-adapter Ethernet is AX88179A/en11, 192.168.1.100/24.
+- [x] Discover all four D405 cameras, inspect views, display montage, and provide a portable camera library.
+- [x] Record and visually verify 12 small gripper cycles, reveal replay, speak and notify.
+- [x] Record four full gripper cycles for about one minute; verify all telemetry endpoints and idle/no-error finish.
+- [x] Raise right follower through four visually checked stages; verify sky-facing gripper and final idle state.
+- [x] Build exact `web/run-the-server.sh` + `web/source/` layout, four live feeds near 30 fps each, and real joint/FK geometry for all arms.
+- [x] Test dashboard and control UI with Puppeteer; open viewer and send speech plus phone notifications.
+- [x] Complete read-only camera performance, scene inventory, kinematics, leader, teleoperation, model-asset, and controller-safety investigations.
 
-## Right gripper test
+## Remaining requested work
 
-- [x] Download and read official safety and control documentation and public driver headers.
-- [x] Verify the test starts and ends with all joints idle. Document that faults can close the gripper and idle is not electrical power-off; binary internals remain unverified.
-- [x] User reports a visual safety check and authorizes proceeding.
-- [x] Test gripper-only position control on `.4` with 2 mm travel, 3-second moves, 20 N effort cap, and original manufacturer velocity bound.
-- [x] Pass offline tests: bounds/offsets, cycles, mode guards, gripper-only limit restoration, abort, and combined cleanup failures.
-- [x] Verify all 12 recorded cycles through 24 telemetry endpoints; final controller state is idle with no errors.
-- [ ] Record results and make orthogonal commits.
-
-- [x] Apply near-verbatim transcript rules and clean existing dictation artifacts without changing meaning.
-
-- [x] Initialize this dump as a Git repository and add local instructions.
-- [x] Keep the user transcript and project manifest.
-- [x] Set up the USB Ethernet link for the robot subnet without changing Wi-Fi or VPN settings.
-- [x] Verify connectivity to all four labeled IP addresses without moving the arms.
-- [x] Record results and report which arms are reachable.
-
-All four addresses responded: 3/3 pings each, 0% packet loss. Details are in `agents/manifest.md`; raw evidence is in `agents/.scratchpad/logs/connectivity.log`. The final 12-cycle video is verified and delivered. Earlier failed attempts remain recorded in `agents/concerns.md`. No further movement is scheduled.
+- [ ] Final VLM/Finder replay delivery for the separate full-stroke video `gripper-full-stroke-20261028-212658.mp4`.
+- [ ] Verified 90°/L-shaped leaders: left reached only ~22.5° before a clearance pause; right has an out-of-configured-bound wrist reading. Do not claim completion or activate right leader blindly.
+- [ ] Optional actual robot-model rendering and wireframe/model toggle. Official asset research is complete; rendering is not implemented.
+- [ ] Calibrated environment mapping or safe 360° scan. Only a static four-view inventory exists; no blind arm sweep.
+- [ ] Long-duration streaming soak and real Windows/Linux camera verification.

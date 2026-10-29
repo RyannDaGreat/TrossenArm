@@ -1,5 +1,9 @@
 # TODO
 
+## Active monitoring
+
+- [ ] Babysit camera availability and relevant capture/control processes until the user stops monitoring. Check once per minute; no motion without a usable camera view. Initial check: no capture/control process or robot USB camera present.
+
 ## Environment and Git cleanup
 
 - [x] Move `pyproject.toml` and `uv.lock` to the root; verify the `uv run` environment.

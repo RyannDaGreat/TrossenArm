@@ -89,3 +89,11 @@ Editorial note: PEP727 is preserved as dictated. Inline script dependency metada
 > I didn't see it move. I have an idea: take a video of it moving and then open that video in my Finder. You have the cameras on the robot arm. Take a video of the gripper opening and closing. Once you verify that's what it is, open it in my Finder so that I can replay it.
 
 > And talk to me out loud and notify me only once that video exists and you verify it through VLM to work properly.
+
+## Follow-up messages
+
+> Hello?
+
+> WTF.
+
+> Babysit background tasks.

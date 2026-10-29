@@ -28,7 +28,7 @@ Near-verbatim transcriptions of all human inputs are in `agents/transcript.md`; 
 
 - Keep transcripts and this manifest current.
 - Do not provide intermediate chat or speech, including setup-completion announcements. The user explicitly objected to the assistant's setup report and safety-question speech. Report the actual requested outcome, not preparatory milestones.
-- Active modes: AUTOPILOT MODE (make routine decisions without blocking) and BULLDOG MODE (persist on the requested problem). Neither mode permits bypassing safety checks.
+- Active modes: AUTOPILOT MODE (make routine decisions without blocking), BULLDOG MODE (persist on the requested problem), and BABYSITTING MODE (continue monitoring until stopped). None permits bypassing safety checks. Monitor relevant capture/control processes and USB camera availability once per minute. At the initial monitoring check no capture/control jobs or robot USB cameras were present. Keep status in the visible console; do not send audio or completion notifications before verified video.
 - Do not send speech or completion notifications until a recorded motion video exists and VLM inspection verifies actual opening and closing. No per-move speech. The user explicitly changed the notification timing after the first failed attempt. Console logs remain visible.
 - Speech uses English messages posted to `https://ntfy.sh/stark_comma`, limited to one or two sentences. This is distinct from completion notifications via `rp call ntfy_send`.
 - The user made initial commit `9b25ae3` and permits further orthogonal commits (one coherent objective per commit).

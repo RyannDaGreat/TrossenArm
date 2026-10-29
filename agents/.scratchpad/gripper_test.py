@@ -3,6 +3,7 @@
 import doctest
 import math
 import os
+import sys
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -12,9 +13,10 @@ TARGET_IP = "192.168.1.4"
 CYCLES = 12
 TRAVEL_M = 0.002  # Two millimeters, not a full closure.
 MOVE_SECONDS = 3.0  # Slow motion relative to the small travel.
-EFFORT_CAP_N = 10.0  # Above the vendor's 7 N friction example; below its 20 N demo.
-VELOCITY_CAP_M_S = 0.005  # Five millimeters per second.
-POSITION_TOLERANCE_M = 0.0005  # Feedback must resolve the two-millimeter motion.
+EFFORT_CAP_N = 20.0  # Lowest vendor-demo value; supervised retry after 10 N produced no travel.
+VELOCITY_CAP_M_S = 0.25  # Original manufacturer bound; trajectory speed is set by MOVE_SECONDS.
+POSITION_TOLERANCE_M = 0.001  # Allow sub-mm closed offset; below factory 4 mm tolerance.
+MIN_MEASURED_TRAVEL_M = TRAVEL_M / 2  # Require real motion, not just loose endpoint agreement.
 ARM_DRIFT_LIMIT_RAD = 0.005  # Stop if a braked joint changes by about 0.29 degrees.
 CONNECT_TIMEOUT_SECONDS = 5.0
 
@@ -74,10 +76,13 @@ def check_feedback(driver, baseline, target):
     positions = list(driver.get_arm_positions())
     modes = list(driver.get_modes())
     actual = driver.get_gripper_position()
+    print(f"FEEDBACK gripper={actual}, modes={modes}, effort={driver.get_gripper_effort()}, "
+          f"compensation={driver.get_gripper_compensation_effort()}", flush=True)
     error = driver.get_error_information()
     if error != "No error":
         raise RuntimeError(f"Controller reports an error: {error}")
-    if len(positions) != len(baseline) or modes[:-1] != [arm.Mode.idle] * 6:
+    if (len(positions) != len(baseline)
+            or modes != [arm.Mode.idle] * 6 + [arm.Mode.position]):
         raise RuntimeError("Unexpected arm state; stopping")
     if any(not math.isfinite(x) or abs(x - b) > ARM_DRIFT_LIMIT_RAD
            for x, b in zip(positions, baseline)):
@@ -87,21 +92,25 @@ def check_feedback(driver, baseline, target):
     return actual
 
 
-def exercise(driver, report=announce):
+def exercise(driver, report=announce, clear_known_fault=False, cycles=CYCLES):
     """
     Command. Configure only the labeled follower, run small cycles, then clean up.
 
     Args:
         driver: Trossen driver, or the offline test double.
         report: Console action logger. No audio is sent during operation.
+        clear_known_fault (bool): One-time recovery only for our recorded velocity-limit fault.
+        cycles (int): Requested cycles; use one for recovery validation.
     Returns:
-        int: Completed open-close cycles; 12 on success. Errors propagate.
+        int: Completed open-close cycles; 12 by default. Errors propagate.
     """
+    if not isinstance(cycles, int) or not 1 <= cycles <= CYCLES:
+        raise ValueError(f"cycles must be between 1 and {CYCLES}")
     configured = False
     enabled = False
     try:
         driver.configure(arm.Model.wxai_v0, arm.StandardEndEffector.wxai_v0_follower,
-                         TARGET_IP, False, CONNECT_TIMEOUT_SECONDS)
+                         TARGET_IP, clear_known_fault, CONNECT_TIMEOUT_SECONDS)
         configured = True
         modes = list(driver.get_modes())
         baseline = list(driver.get_arm_positions())
@@ -115,6 +124,9 @@ def exercise(driver, report=announce):
             raise RuntimeError("Expected seven idle joints; refusing to override existing control")
         if not all(math.isfinite(x) for x in baseline):
             raise RuntimeError("Nonfinite arm feedback")
+        limit_fields = ("position_min", "position_max", "position_tolerance",
+                        "velocity_max", "velocity_tolerance", "effort_max", "effort_tolerance")
+        original_limits = [tuple(getattr(limit, field) for field in limit_fields) for limit in limits]
         gripper_limit = limits[-1]
         lower, upper = motion_interval(initial, gripper_limit.position_min,
                                        gripper_limit.position_max, gripper_limit.position_tolerance)
@@ -126,31 +138,45 @@ def exercise(driver, report=announce):
         if not (math.isfinite(gripper_limit.effort_max) and gripper_limit.effort_max > 0
                 and math.isfinite(gripper_limit.velocity_max) and gripper_limit.velocity_max > 0):
             raise RuntimeError("Invalid controller limits")
-        gripper_limit.effort_max = min(gripper_limit.effort_max, EFFORT_CAP_N)
-        gripper_limit.velocity_max = min(gripper_limit.velocity_max, VELOCITY_CAP_M_S)
+        gripper_limit.effort_max = EFFORT_CAP_N
+        gripper_limit.velocity_max = VELOCITY_CAP_M_S
         driver.set_joint_limits(limits)
-        applied = driver.get_joint_limits()[-1]
+        readback = driver.get_joint_limits()
+        applied = readback[-1]
+        if len(readback) != 7 or [tuple(getattr(limit, field) for field in limit_fields)
+                                  for limit in readback[:-1]] != original_limits[:-1]:
+            raise RuntimeError("Arm joint limits changed unexpectedly")
+        for index, field in enumerate(limit_fields):
+            if field not in ("velocity_max", "effort_max") and getattr(applied, field) != original_limits[-1][index]:
+                raise RuntimeError(f"Unexpected gripper limit change: {field}")
         if not (0 < applied.effort_max <= EFFORT_CAP_N
                 and 0 < applied.velocity_max <= VELOCITY_CAP_M_S * 1.00001):
             raise RuntimeError("Controller did not accept reduced gripper limits")
         report("Enabling the right gripper now. It may move slightly to its starting position.")
         enabled = True
         driver.set_gripper_mode(arm.Mode.position)
+        if list(driver.get_modes()) != [arm.Mode.idle] * 6 + [arm.Mode.position]:
+            raise RuntimeError("Position mode was not enabled; refusing the first target")
         driver.set_gripper_position(initial_target, MOVE_SECONDS, True)
-        check_feedback(driver, baseline, initial_target)
+        previous = check_feedback(driver, baseline, initial_target)
         if abs(initial_target - lower) > POSITION_TOLERANCE_M:
             report("Closing the right gripper by at most two millimeters to start the test.")
             driver.set_gripper_position(lower, MOVE_SECONDS, True)
-            check_feedback(driver, baseline, lower)
-        for cycle in range(1, CYCLES + 1):
+            previous = check_feedback(driver, baseline, lower)
+        for cycle in range(1, cycles + 1):
             for word, target in (("Opening", upper), ("Closing", lower)):
-                report(f"{word} the right gripper two millimeters. Cycle {cycle} of {CYCLES}.")
+                report(f"{word} the right gripper two millimeters. Cycle {cycle} of {cycles}.")
                 driver.set_gripper_position(target, MOVE_SECONDS, True)
                 actual = check_feedback(driver, baseline, target)
+                direction = 1 if word == "Opening" else -1
+                if direction * (actual - previous) < MIN_MEASURED_TRAVEL_M:
+                    raise RuntimeError(f"Insufficient measured {word}: {previous} -> {actual}")
+                previous = actual
                 print(f"VERIFIED cycle={cycle} action={word} target={target:.6f} "
                       f"actual={actual:.6f}", flush=True)
-        return CYCLES
+        return cycles
     finally:
+        primary_error = sys.exception()
         if configured:
             try:
                 if enabled:
@@ -162,7 +188,13 @@ def exercise(driver, report=announce):
                           f"gripper={driver.get_gripper_position()}, "
                           f"errors={driver.get_error_information()}", flush=True)
                 finally:
-                    driver.cleanup()
+                    try:
+                        driver.cleanup()
+                    except RuntimeError as cleanup_error:
+                        if primary_error is not None:
+                            raise BaseExceptionGroup("Motion and cleanup both failed",
+                                                     [primary_error, cleanup_error])
+                        raise
                     print("Driver cleanup complete; electrical power is not switched off.", flush=True)
 
 
@@ -187,10 +219,23 @@ def self_check():
             raise AssertionError(f"Invalid interval accepted: {invalid}")
     driver = Mock()
     driver.get_modes.return_value = [arm.Mode.idle] * 7
+
+    def set_fake_mode(mode):
+        """
+        Command. Update the mock gripper state, not real hardware.
+
+        Args:
+            mode: Simulated gripper mode.
+        Returns:
+            None; set_fake_mode(arm.Mode.position) updates the mock's final mode.
+        """
+        driver.get_modes.return_value[-1] = mode
+
+    driver.set_gripper_mode.side_effect = set_fake_mode
     driver.get_arm_positions.return_value = [0.0] * 6
     driver.get_joint_limits.return_value = [SimpleNamespace(
         position_min=0.0, position_max=0.04, position_tolerance=0.004,
-        effort_max=100.0, velocity_max=0.25,
+        effort_max=100.0, effort_tolerance=300.0, velocity_max=0.005, velocity_tolerance=0.0,
     ) for _ in range(7)]
     driver.get_gripper_position.side_effect = [0.01, 0.01] + [0.012, 0.01] * CYCLES + [0.01]
     driver.get_error_information.return_value = "No error"
@@ -211,7 +256,29 @@ def self_check():
     driver.cleanup.assert_called_once()
     driver.get_gripper_position.side_effect = [-0.000736, 0.0] + [0.002, 0.0] * CYCLES + [0.0]
     assert exercise(driver, Mock()) == CYCLES
-    print("PASS: offline planner, 12-cycle flow, bounded offset, failed-motion abort, and cleanup. No hardware used.")
+    assert driver.get_joint_limits.return_value[-1].velocity_max == VELOCITY_CAP_M_S
+    assert driver.get_joint_limits.return_value[0].velocity_max == 0.005
+    driver.get_gripper_position.side_effect = None
+    driver.get_gripper_position.return_value = 0.01
+    driver.set_gripper_mode.side_effect = None
+    driver.set_gripper_position.reset_mock()
+    try:
+        exercise(driver, Mock())
+    except RuntimeError as error:
+        assert "Position mode was not enabled" in str(error)
+    else:
+        raise AssertionError("Idle gripper incorrectly accepted as position-controlled")
+    driver.set_gripper_position.assert_not_called()
+    driver.set_gripper_mode.side_effect = set_fake_mode
+    driver.cleanup.side_effect = RuntimeError("mock cleanup failed")
+    try:
+        exercise(driver, Mock())
+    except ExceptionGroup as errors:
+        assert "Gripper failed target" in str(errors.exceptions[0])
+        assert "mock cleanup failed" in str(errors.exceptions[1])
+    else:
+        raise AssertionError("Primary failure was not preserved alongside cleanup failure")
+    print("PASS: planner, cycles, offsets, mode guard, gripper-only limit restoration, abort, and combined cleanup failures. No hardware used.")
 
 
 if __name__ == "__main__":

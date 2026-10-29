@@ -43,3 +43,25 @@ Editorial note: The stated arm count is inconsistent with the listed roles and a
 > I just saw you doing something illegal: you used `uv pip install`. Never again. This is a dump. You use `uv run` only. You can maintain environment files and use PEP727, but you are not allowed to use any sort of `pip install`.
 
 Editorial note: PEP727 is preserved as dictated. Inline script dependency metadata is defined by PEP 723.
+
+## Ignore generated files
+
+> Remember to ignore things that should be ignored.
+
+## Project layout
+
+> The pyproject can go at the project root, outside of scratchpad.
+
+> So can the uv.lock.
+
+> I don't know why you're creating a separate notes file. Do you know what a frenzy is?
+
+> Okay, so you DO know what it is. Do you know what a dump is?
+
+## Continue
+
+> Go on. Continue.
+
+> Go on.
+
+> Go on.

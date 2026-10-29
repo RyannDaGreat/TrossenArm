@@ -2,7 +2,7 @@
 
 ## Active monitoring
 
-- [ ] Babysit camera availability and relevant capture/control processes until the user stops monitoring. Check once per minute; no motion without a usable camera view. Initial check: no capture/control process or robot USB camera present.
+- [ ] Continue read-only babysitting until the user stops it. No capture/control job remains running after the successful test. Do not repeat motion or success notifications.
 
 ## Environment and Git cleanup
 
@@ -12,20 +12,20 @@
 
 ## Camera
 
-- [x] Camera investigator `del_mvssdd85_7gvy` finished: only built-in Mac camera and Desk View available.
-- [x] Capture and visually inspect frames: gripper jaws are not visible.
-- [ ] Obtain a usable camera view: robot camera USB hub must be connected, or available camera aimed at the gripper.
-- [ ] Record actual opening and closing and verify the video through VLM.
-- [ ] Reveal the verified video in Finder; only then speak and notify.
+- [x] Identify and connect the Intel RealSense D405 after the USB hub was plugged in.
+- [x] Implement model/USB-identity discovery on Mac and serial discovery on Windows/Linux; no saved port or OS index. Multiple matches fail explicitly.
+- [x] Verify Mac RGB capture and recording; Windows/Linux adapter tests pass with mocks, real hardware remains untested.
+- [x] Record 12 actual open–close cycles; verify the moving upper-left gripper through VLM inspection of decoded frames.
+- [x] Reveal `agents/.scratchpad/right-gripper-12-cycles-zoom.mp4` in Finder and confirm selection; speak and notify after verification.
 
 ## Right gripper test
 
 - [x] Download and read official safety and control documentation and public driver headers.
-- [ ] Resolve safe initialization and shutdown: documented destructor changes modes, and runtime faults can close the gripper; core implementation is a binary.
+- [x] Verify the test starts and ends with all joints idle. Document that faults can close the gripper and idle is not electrical power-off; binary internals remain unverified.
 - [x] User reports a visual safety check and authorizes proceeding.
-- [ ] Establish safe gripper-only control on right follower `.4`.
-- [x] Verify the revised limited-motion script offline: bounded initial offset, invalid bounds, 12 mocked cycles, failed-motion abort, and cleanup. No live motion verified.
-- [ ] With usable video capture running, verify gripper opening and closing; original 12 cycles remain pending.
+- [x] Test gripper-only position control on `.4` with 2 mm travel, 3-second moves, 20 N effort cap, and original manufacturer velocity bound.
+- [x] Pass offline tests: bounds/offsets, cycles, mode guards, gripper-only limit restoration, abort, and combined cleanup failures.
+- [x] Verify all 12 recorded cycles through 24 telemetry endpoints; final controller state is idle with no errors.
 - [ ] Record results and make orthogonal commits.
 
 - [x] Apply near-verbatim transcript rules and clean existing dictation artifacts without changing meaning.
@@ -36,4 +36,4 @@
 - [x] Verify connectivity to all four labeled IP addresses without moving the arms.
 - [x] Record results and report which arms are reachable.
 
-All four addresses responded: 3/3 pings each, 0% packet loss. Details are in `agents/manifest.md`; raw evidence is in `agents/.scratchpad/logs/connectivity.log`. First driver connection succeeded but aborted before position mode/targets. All joints ended idle. No verified motion or video yet. No speech or completion notifications until VLM verifies the requested video.
+All four addresses responded: 3/3 pings each, 0% packet loss. Details are in `agents/manifest.md`; raw evidence is in `agents/.scratchpad/logs/connectivity.log`. The final 12-cycle video is verified and delivered. Earlier failed attempts remain recorded in `agents/concerns.md`. No further movement is scheduled.

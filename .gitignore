@@ -1,3 +1,6 @@
+# Finder metadata is local to the viewing machine.
+.DS_Store
+
 # Recreated from tracked dependency metadata and vendor revision notes.
 agents/.scratchpad/python/
 agents/.scratchpad/trossen_arm/

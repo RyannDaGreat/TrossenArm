@@ -4,7 +4,7 @@ Read `agents/todo.md` and, if present, `agents/manifest.md` and `agents/concerns
 
 This is a portable dump. Use paths relative to the Git root. Keep experiments, downloaded tools, and test results in `agents/.scratchpad/`; keep logs in `agents/.scratchpad/logs/`.
 
-Current scope: record a safe right-follower gripper-only test, verify opening/closing through VLM, and reveal the video in Finder. The original 12 cycles remain pending. Verify safety and a usable camera view before movement. Do not move arm joints or change their torque/control modes. Do not run vendor motion demos blindly. No speech or completion notification until the video is visually verified. Follow the manifest's safety requirements.
+Current state: the right-follower gripper completed 12 small open–close cycles; the video was visually verified and revealed in Finder. Continue read-only babysitting until stopped; do not repeat motion or success notifications. For later motion requests, verify physical clearance and camera view first. Do not move arm joints or change their torque/control modes. Do not run vendor motion demos blindly. Follow the manifest's safety and speech requirements.
 
 Python: use `uv run` only. Never use `pip install`, `uv pip install`, or another pip installation command. Keep `pyproject.toml` and `uv.lock` at the project root. Declare dependencies there or in PEP 723 script metadata. Keep project notes in `agents/manifest.md`, not in separate notes files. Keep generated environments and caches inside this dump, ignored by Git and reproducible.
 

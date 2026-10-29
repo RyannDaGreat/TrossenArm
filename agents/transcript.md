@@ -97,3 +97,11 @@ Editorial note: PEP727 is preserved as dictated. Inline script dependency metada
 > WTF.
 
 > Babysit background tasks.
+
+## Portable camera library
+
+> Alright, I plugged it in. It's your responsibility to figure out the name of this device and make a little library to use the camera, because this might be on a new computer later. It might even be a Windows or Linux computer, and who knows what port it will be plugged into. You're on a laptop right now; this computer is going to change rapidly, so make it invariant to that. Talk to me out loud once you get the video with the robot arm opening and closing.
+
+## Persistent monitoring and speech
+
+> Always go into babysitting mode. If you are truly 100%, totally 100 billion percent blocked, then you can talk out loud if it's the last message you'll ever say, basically. When you reach a terminal state, that's when you're allowed to talk. But usually you should be in autopilot mode, in bulldog mode, so you should try to get around those blockers.

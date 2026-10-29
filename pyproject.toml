@@ -2,7 +2,17 @@
 name = "trossen-gripper-scratchpad"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = ["trossen-arm==1.8.8"]
+dependencies = [
+    "numpy",
+    "pillow",
+    "imageio-ffmpeg==0.7.0",
+    "opencv-python-headless",
+    "cv2-enumerate-cameras; sys_platform == 'darwin'",
+    "pyrealsense2==2.59.1.11053; sys_platform != 'darwin'",
+]
+
+[project.optional-dependencies]
+robot = ["trossen-arm==1.8.8"]
 
 [tool.uv]
 package = false

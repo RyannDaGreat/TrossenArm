@@ -230,3 +230,7 @@ User-supplied photos were reviewed and copied without alteration:
 - [Controller labels](reference-images/controller-role-ip-labels.jpeg): leader right192.168.1.2, follower right192.168.1.4, leader left192.168.1.3, follower left192.168.1.5.
 
 Source filenames: IMG_2088.jpeg through IMG_2091.jpeg in that order. These photos document the installation before the leader copies, not the completed leader pose. Nearby frame members and cables remain part of the installation; the images are not a calibrated collision model.
+
+## Four-arm preset accordion
+
+Position presets live in a native collapsible details/summary section, initially collapsed, with explicit left/right follower and left/right leader up buttons. All four use the same tall-target computation, preserving base yaw/tool roll. Leader buttons raise the selected leader, rather than copying a possibly lowered follower. Existing per-arm SDK owners execute each request; the left pair routes the selected role through its guarded SDK method. Shared reservation excludes puppet and other presets, with unchanged heartbeat, cancellation, fault and idle confirmation rules. Validate role routing and shutdown with mocked drivers and intercept all browser control requests during UI tests; no physical motion is needed to implement this change.

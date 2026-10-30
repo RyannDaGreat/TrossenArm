@@ -1,6 +1,7 @@
 """Single-owner, operator-held left-arm following; no gripper copying or automatic homing."""
 import logging
 import math
+from functools import partial
 import threading
 import time
 
@@ -238,10 +239,6 @@ class LeftPair:
             self.sdk(role, method, *args)
         return leader_ref, reference, bounds
 
-    def preset_sdk(self, method, *args):
-        """Command. Route preset calls through this owner's failure guard. Args: method, args: SDK call. Returns: SDK result."""
-        return self.sdk("follower_left", method, *args)
-
     def run(self):
         """
         Command. Own the left pair until shutdown/fault; powered following requires held intent.
@@ -256,11 +253,13 @@ class LeftPair:
                 self.sdk(role, "configure", arm.Model.wxai_v0, preset, ip, False, 5.0)
             self.set_state(mode="ready")
             if self.presets:
-                self.presets.connected("follower_left")
+                for role in STOP_ORDER:
+                    self.presets.connected(role)
             last_tick, last_publish = time.monotonic(), 0.0
             while not self.stop.is_set():
                 if self.presets:
-                    self.presets.tick("follower_left", self.preset_sdk)
+                    for role in STOP_ORDER:
+                        self.presets.tick(role, partial(self.sdk, role))
                 now = time.monotonic()
                 dt, last_tick = now-last_tick, now
                 with self.lock:
@@ -329,11 +328,13 @@ class LeftPair:
             LOG.exception("Left pair fault; stopping healthy peer first, no automatic resume")
         finally:
             if self.presets:
-                self.presets.unavailable("follower_left", self.fault or "Owner shutting down")
+                for role in STOP_ORDER:
+                    self.presets.unavailable(role, self.fault or "Owner shutting down")
             confirmed = self.halt()
             if self.presets and confirmed:
                 # halt() already verified both idle; release a queued preset only now.
-                self.presets.confirm_halted("follower_left", self.fault or "Server stopped")
+                for role in STOP_ORDER:
+                    self.presets.confirm_halted(role, self.fault or "Server stopped")
             for role in STOP_ORDER:
                 if role not in self.drivers:
                     continue

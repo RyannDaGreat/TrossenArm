@@ -1,4 +1,4 @@
-"""Follower presets driven only by existing SDK-owner threads."""
+"""Arm presets driven only by existing SDK-owner threads."""
 import math
 import threading
 import time
@@ -13,7 +13,7 @@ POSITION_ERROR_RAD = 0.03
 INITIAL_OFFSET_RAD = 0.002
 SPEED_LIMIT_RAD_S = 1.0
 STATIONARY_SPEED_RAD_S = 0.05
-FOLLOWERS = ("follower_left", "follower_right")
+ROLES = ("follower_left", "follower_right", "leader_left", "leader_right")
 
 
 def tall_target(current, bounds):
@@ -64,7 +64,7 @@ class Presets:
                           error=None, remaining_s=0, heading="Keep current base yaw and tool roll")
 
     def snapshot(self):
-        """Query. Return visible state and connected follower roles."""
+        """Query. Return visible state and connected arm roles."""
         with self.lock:
             return {**self.state, "available": sorted(self.available)}
 
@@ -77,7 +77,7 @@ class Presets:
         """
         Command. Queue exclusive browser intent, never hardware calls.
 
-        Args: action: start/hold/stop; client: browser token; sequence: increasing number; role: follower.
+        Args: action: start/hold/stop; client: browser token; sequence: increasing number; role: arm.
         Returns: None; start reserves motion until confirmed idle, including during cancellation.
         """
         with self.lock:
@@ -89,8 +89,8 @@ class Presets:
                 pair = self.pair.snapshot()
                 if self.busy() or pair["enabled"] or pair["stop_pending"] or pair["active"] is not False:
                     raise ValueError("Stop the current control mode before starting a preset")
-                if role not in self.available or (role == "follower_left" and pair["mode"] != "ready"):
-                    raise ValueError("Follower is not ready")
+                if role not in self.available or (role in ("follower_left", "leader_left") and pair["mode"] != "ready"):
+                    raise ValueError("Arm is not ready")
                 self.client = client
                 self.generation += 1
                 self.started = None
@@ -112,8 +112,8 @@ class Presets:
             self.sequences[client] = sequence
 
     def connected(self, role):
-        """Command. Mark a configured follower available. Args: role: owner role. Returns: None."""
-        if role in FOLLOWERS:
+        """Command. Mark a configured arm available. Args: role: owner role. Returns: None."""
+        if role in ROLES:
             with self.lock:
                 self.available.add(role)
 

@@ -62,3 +62,7 @@
 - [x] Save four operator reference photographs and standing leader-clearance assumption in the manifest.
 - [ ] Restore dashboard and report completion.
 - [x] Restore/open dashboard after leader copies; verify four live cameras and four idle arms.
+
+## Four-arm preset controls
+- [ ] Add leader-up controls using existing SDK owners.
+- [ ] Put all position presets in a collapsed accordion; verify browser and owner routing offline.

@@ -22,8 +22,8 @@ const browser = await puppeteer.launch({ executablePath: '/Applications/Google C
   args: ['--enable-webgl', '--enable-unsafe-swiftshader'], defaultViewport: { width: 1440, height: 1080 } });
 const actions = [], errors = [];
 const fake = { puppet: { mode: 'ready', enabled: false, active: false, stop_pending: false, stop_confirmed: true },
-  presets: { mode: 'ready', role: null, active: false, stop_confirmed: true, available: ['follower_left', 'follower_right'] }, cameras: {}, arms: {} };
-for (const role of ['follower_left', 'follower_right']) fake.arms[role] = { ready: true, joints: [0,0,0,0,0,0], modes: Array(7).fill('idle'), fk_error_m: 0,
+  presets: { mode: 'ready', role: null, active: false, stop_confirmed: true, available: ['follower_left', 'follower_right', 'leader_left', 'leader_right'] }, cameras: {}, arms: {} };
+for (const role of ['follower_left', 'follower_right', 'leader_left', 'leader_right']) fake.arms[role] = { ready: true, joints: [0,0,0,0,0,0], modes: Array(7).fill('idle'), fk_error_m: 0,
   points: Array.from({length:9}, (_,i) => [0,0,i/10]), tool: [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]], limits: [] };
 try {
   const page = await browser.newPage();
@@ -51,7 +51,9 @@ try {
   await page.goto(base, {waitUntil:'domcontentloaded'});
   await page.waitForFunction(() => window.__observatory.status?.presets);
   await page.click('.control-launch');
-  const left = '[aria-label="Left arm up"]', right = '[aria-label="Right arm up"]', puppet = '[aria-label="Enable puppet mode"]';
+  assert(!(await page.$eval('.preset-section', e=>e.open)));
+  await page.click('.preset-section summary');
+  const left = '[aria-label="Left follower up"]', right = '[aria-label="Right follower up"]', puppet = '[aria-label="Enable puppet mode"]';
   assert(await page.$eval(left, e=>e.disabled));
   await page.click('[aria-label="Confirm operator and workspace clearance"]');
   assert(!(await page.$eval(left,e=>e.disabled)));
@@ -67,6 +69,15 @@ try {
   await page.waitForFunction(() => window.__observatory.status.presets.role === 'follower_right');
   await page.click('.stop-control');
   await page.waitForFunction(() => window.__observatory.status.presets.role === null);
+  for (const [label, role] of [['Left leader up','leader_left'],['Right leader up','leader_right']]) {
+    await page.click(`[aria-label="${label}"]`);
+    await page.waitForFunction(role => window.__observatory.status.presets.role === role, {}, role);
+    await page.click('.stop-control');
+    await page.waitForFunction(() => window.__observatory.status.presets.role === null);
+  }
+  await page.click('.preset-section summary');
+  assert(!(await page.$eval('.preset-section', e=>e.open)));
+  await page.click('.preset-section summary');
   await page.click(puppet);
   await page.waitForFunction(() => window.__observatory.status.puppet.enabled);
   assert(await page.$eval(left,e=>e.disabled));

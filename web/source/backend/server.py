@@ -183,7 +183,7 @@ class Observatory:
 
     def telemetry(self, role, ip):
         """
-        Command. Own one SDK connection and publish joint/FK reads and execute queued follower presets.
+        Command. Own one SDK connection and publish joint/FK reads and execute queued arm presets.
 
         Args: role (str): arm role; ip (str): controller IP.
         Returns: None; publishes six angles and (9,3) frame origins in local base coordinates.
@@ -371,7 +371,7 @@ class PresetRequest(BaseModel):
     """Named presets only; arbitrary joint targets and controller addresses are rejected."""
     model_config = {"extra": "forbid"}
     action: Literal["start", "hold", "stop"]
-    role: Literal["follower_left", "follower_right"] | None = None
+    role: Literal["follower_left", "follower_right", "leader_left", "leader_right"] | None = None
     client: str = Field(min_length=8, max_length=80)
     sequence: int = Field(ge=1)
 

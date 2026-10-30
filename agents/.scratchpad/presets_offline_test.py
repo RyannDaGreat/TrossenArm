@@ -58,7 +58,7 @@ class Tests(unittest.TestCase):
         self.p = Presets(threading.Event())
         self.p.pair = LeftPair(self.p.stop, lambda *args: None, self.p)
         self.p.pair.set_state(mode='ready', stop_confirmed=True)
-        self.p.connected('follower_left'); self.p.connected('follower_right')
+        for role in presets.ROLES: self.p.connected(role)
         self.d = Fake()
         self.seq = 0
     def request(self, action, role='follower_left'):
@@ -174,6 +174,59 @@ class Tests(unittest.TestCase):
         self.assertTrue(hub.presets.snapshot()['stop_confirmed'])
         driver.cleanup.assert_called_once()
 
+    def test_leader_right_existing_owner(self):
+        """Command. Exercise the actual right owner loop with a fake SDK; API queues only."""
+        hub = server.Observatory()
+        hub.pair.set_state(mode='ready')
+        driver = Mock()
+        for method in ('get_error_information', 'get_arm_positions', 'get_arm_velocities',
+                       'get_modes', 'get_joint_limits', 'set_arm_modes', 'set_arm_positions'):
+            getattr(driver, method).side_effect = lambda *args, method=method: self.d.call(method, *args)
+        def publish(role, owned):
+            """Command. Queue intent on first telemetry, end after target write. Args: role, owned: owner. Returns: None."""
+            if not hub.presets.busy():
+                hub.presets.request('start', 'test-browser', 1, role)
+            elif hub.presets.snapshot()['mode'] == 'moving':
+                hub.stop.set()
+        hub.publish = publish
+        with patch.object(server.arm, 'TrossenArmDriver', return_value=driver) as factory:
+            hub.telemetry('leader_right', 'fixture-only')
+        factory.assert_called_once()
+        self.assertEqual(self.d.modes, [arm.Mode.idle]*7)
+        self.assertFalse(hub.presets.busy())
+        self.assertTrue(hub.presets.snapshot()['stop_confirmed'])
+        driver.cleanup.assert_called_once()
+
+    def test_leader_left_existing_owner(self):
+        """Command. Exercise the actual right owner loop with a fake SDK; API queues only."""
+        hub = server.Observatory()
+        hub.pair.set_state(mode='ready')
+        driver = Mock()
+        for method in ('get_error_information', 'get_arm_positions', 'get_arm_velocities',
+                       'get_modes', 'get_joint_limits', 'set_arm_modes', 'set_arm_positions'):
+            getattr(driver, method).side_effect = lambda *args, method=method: self.d.call(method, *args)
+        def publish(role, owned):
+            """Command. Queue intent on first telemetry, end after target write. Args: role, owned: owner. Returns: None."""
+            if role != 'leader_left': return
+            if not hub.presets.busy():
+                hub.presets.request('start', 'test-browser', 1, role)
+            elif hub.presets.snapshot()['mode'] == 'moving':
+                hub.stop.set()
+        def move(target, duration, blocking):
+            """Command. Apply fake target and end the owner loop after its main trajectory."""
+            self.d.call('set_arm_positions', target, duration, blocking)
+            if duration == presets.DURATION_SECONDS:
+                hub.stop.set()
+        driver.set_arm_positions.side_effect = move
+        hub.pair.publish = publish
+        with patch.object(server.arm, 'TrossenArmDriver', return_value=driver) as factory:
+            hub.pair.run()
+        self.assertEqual(factory.call_count, 2)
+        self.assertEqual(self.d.modes, [arm.Mode.idle]*7)
+        self.assertFalse(hub.presets.busy())
+        self.assertTrue(hub.presets.snapshot()['stop_confirmed'])
+        self.assertEqual(driver.cleanup.call_count, 2)
+
     def test_atomic_reservation(self):
         """Command. Race puppet and preset requests; only one can acquire motion."""
         barrier = threading.Barrier(2)
@@ -204,7 +257,7 @@ class Tests(unittest.TestCase):
                         response = await client.post('/api/presets', json=body, headers={} if origin is None else {'Origin': origin})
                         self.assertEqual(response.status_code, 403)
                     headers = {'Origin': 'http://127.0.0.1:28347'}
-                    response = await client.post('/api/presets', json={**body, 'role': 'leader_right'}, headers=headers)
+                    response = await client.post('/api/presets', json={**body, 'role': 'unknown_arm'}, headers=headers)
                     self.assertEqual(response.status_code, 422)
                     response = await client.post('/api/presets', json=body, headers=headers)
                     self.assertEqual(response.status_code, 200)

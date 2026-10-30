@@ -54,9 +54,11 @@ try {
   await page.goto(base, {waitUntil:'domcontentloaded'});
   await page.waitForFunction(() => window.__observatory.status?.presets);
   await page.click('.control-launch');
+  assert.equal(await page.$$('article.puppet-card').then(cards => cards.length), 2);
+  assert.equal(await page.$('select'), null);
   assert(!(await page.$eval('.preset-section', e=>e.open)));
   await page.click('.preset-section summary');
-  const left = '[aria-label="Left follower up"]', right = '[aria-label="Right follower up"]', puppet = '[aria-label="Enable puppet mode"]';
+  const left = '[aria-label="Left follower up"]', right = '[aria-label="Right follower up"]', puppet = '[aria-label="Enable left puppet mode"]';
   assert(await page.$eval(left, e=>e.disabled));
   await page.click('[aria-label="Confirm operator and workspace clearance"]');
   assert(!(await page.$eval(left,e=>e.disabled)));
@@ -84,6 +86,7 @@ try {
   await page.click(puppet);
   await page.waitForFunction(() => window.__observatory.status.puppet.enabled);
   assert(await page.$eval(left,e=>e.disabled));
+  assert(await page.$eval('[aria-label="Enable right puppet mode"]', e=>e.disabled));
   await page.click('[aria-label="Turn off puppet time limit"]');
   await page.waitForFunction(() => window.__observatory.status.puppet.unlimited);
   await page.waitForSelector('[aria-label="Puppet timer off — no time limit"]');
@@ -93,8 +96,8 @@ try {
   await page.waitForFunction(() => !window.__observatory.status.puppet.enabled);
   await page.click('.control-launch');
   await page.click('[aria-label="Confirm operator and workspace clearance"]');
-  await page.select('[aria-label="Puppet arm pair"]','right');
-  await page.click(puppet);
+  assert.equal(await page.$('select'), null);
+  await page.click('[aria-label="Enable right puppet mode"]');
   await page.waitForFunction(() => window.__observatory.status.puppet_right.enabled);
   await page.click('[aria-label="Turn off puppet time limit"]');
   await page.waitForFunction(() => window.__observatory.status.puppet_right.unlimited);
@@ -103,6 +106,7 @@ try {
   assert(actions.some(x => x.kind === 'puppet' && x.side === 'right' && x.action === 'arm'));
   await page.click('[aria-label="Close robot controls"]');
   await page.setViewport({width:390,height:844});
+  await page.evaluate(() => { document.querySelector(".preset-section").open = false; });
   await page.click('.control-launch');
   assert(await page.$eval('dialog', e => e.getBoundingClientRect().width <= innerWidth));
   await page.screenshot({path:'agents/.scratchpad/presets-ui-mobile.png'});

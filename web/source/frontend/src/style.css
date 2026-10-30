@@ -94,3 +94,5 @@ button:focus-visible { outline: var(--rule) solid var(--red); outline-offset: va
 .preset-section > summary { cursor: pointer; }
 .preset-section[open] > summary span { font-size: 0; }
 .preset-section[open] > summary span::after { content: "4 arms / 8 seconds · collapse"; font-size: var(--small); }
+.puppet-card .switch-row { flex-wrap: wrap; margin-top: var(--space-md); }
+.puppet-card .switch-row > span { flex: 1; font-size: var(--small); }

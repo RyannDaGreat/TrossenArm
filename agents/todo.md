@@ -73,3 +73,5 @@
 
 - [x] Implement right-pair puppeteering, side selector, shared seven-joint/timer behavior; verify mocked owner/API/browser and real connections.
 - [ ] Operator-driven right-pair copying trial (software and connections verified; no automatic following).
+
+- [x] Replace puppet dropdown with two visible illustrated cards; verified both routes, stopwatch, stopping and mobile layout.

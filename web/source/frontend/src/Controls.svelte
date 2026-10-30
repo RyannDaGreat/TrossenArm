@@ -15,7 +15,7 @@
   const heartbeatMs = 100, requestTimeoutMs = 1500;
   const jointNames = ['Base yaw', 'Shoulder', 'Elbow', 'Wrist pitch', 'Wrist yaw', 'Tool roll', 'Gripper'];
   const choices = [{ role: 'follower_left', title: 'Left follower up', number: '01' }, { role: 'follower_right', title: 'Right follower up', number: '02' }, { role: 'leader_left', title: 'Left leader up', number: '03' }, { role: 'leader_right', title: 'Right leader up', number: '04' }];
-  let occupied = $derived(!!control || pending || !!pairState?.enabled || !!presets?.role);
+  let occupied = $derived(!!control || pending || !!leftState?.enabled || !!rightState?.enabled || !!presets?.role);
   let visibleState = $derived(presets?.role ? presets : pairState);
 
   /** Pure function. Convert radians to a degree label. @param {number} value Radians. @returns {string} @example degrees(Math.PI/2) // '90.0°' */
@@ -36,6 +36,7 @@
   /** Command. Latch cancellation even while a start request is in flight. @returns {Promise<void>} */
   async function stop() {
     generation++;
+    if (!control) side = rightState?.enabled ? 'right' : leftState?.enabled ? 'left' : side;
     const kind = control || (presets?.role ? 'presets' : pairState?.enabled ? 'puppet' : null);
     control = null; clearInterval(timer);
     if (kind) { try { await send(kind, 'stop'); } catch (failure) { fail(failure); } }
@@ -56,9 +57,10 @@
     } finally { sending = false; }
   }
 
-  /** Command. Start one selected mode; cancellation cannot revive a delayed response. @param {string} kind Control API. @param {string} [role] Arm. @returns {Promise<void>} */
-  async function start(kind, role) {
+  /** Command. Start one selected mode; cancellation cannot revive a delayed response. @param {string} kind Control API. @param {string} [role] Arm. @param {string} [selectedSide] Pair to control. @returns {Promise<void>} */
+  async function start(kind, role, selectedSide = side) {
     if (occupied || !confirmed) return;
+    side = selectedSide;
     pending = true; error = ''; control = kind; unlimitedRequested = false;
     const token = ++generation;
     try {
@@ -79,6 +81,7 @@
     /** Command. Queue stop on page exit; server heartbeat remains independent. @returns {void} */
     function leaving() {
       generation++;
+      if (!control) side = rightState?.enabled ? 'right' : leftState?.enabled ? 'left' : side;
       const kind = control || (presets?.role ? 'presets' : pairState?.enabled ? 'puppet' : null);
       if (kind && !navigator.sendBeacon(`/api/${kind}`, new Blob([
         JSON.stringify({ action: 'stop', ...(kind === 'puppet' ? {side} : {}), client, sequence: ++sequence })
@@ -112,10 +115,24 @@
     <p class="notice">Raises one selected arm with its tool pointing vertically up. Base yaw stays as it is; wrist yaw and tool roll reset to zero and the gripper opens. North is not calibrated in these presets.</p>
   </details>
   <section class="puppet-section" aria-label="Puppet mode">
-    <label>Arm pair <select aria-label="Puppet arm pair" bind:value={side} disabled={occupied}><option value="left">Left</option><option value="right">Right</option></select></label>
-    <div class="switch-row"><div><p class="eyebrow">PUPPET MODE</p><strong>Move the {side} arm by hand.</strong><small>Leader {side} .{side === "left" ? "3" : "2"} → follower {side} .{side === "left" ? "5" : "4"}. Absolute angles and gripper opening. Use Up on both {side} arms first; base headings must match.</small></div>
-      {#if control === 'puppet' || pairState?.enabled}<Stopwatch remaining={pairState?.remaining_s ?? 60} unlimited={!!pairState?.unlimited} onclick={() => { unlimitedRequested = true; }} />{/if}
-      <button class="switch" role="switch" aria-checked={control === 'puppet' || !!pairState?.enabled} aria-label="Enable puppet mode" disabled={!confirmed || pending || !!presets?.role || control === 'presets' || !pairState || (!pairState.enabled && pairState.mode !== 'ready')} onclick={() => control === 'puppet' || pairState?.enabled ? stop() : start('puppet')}><span></span></button></div>
+    <div class="section-title"><h3>Puppet mode</h3><span>Choose left or right</span></div>
+    <div class="preset-grid">
+      {#each ['left', 'right'] as choice}
+        {@const state = choice === 'left' ? leftState : rightState}
+        {@const running = (control === 'puppet' && side === choice) || !!state?.enabled}
+        <article class="preset-card puppet-card">
+          <span class="preset-index">{choice.toUpperCase()} / LEADER → FOLLOWER</span>
+          <svg viewBox="0 0 160 150" aria-hidden="true"><path class="preset-guide" d="M12 125H148M69 65H94M86 57L94 65L86 73"/><path class="preset-arm" d="M15 125H55M35 125V96L24 63L35 36V21M26 13V21H44V13M105 125H145M125 125V96L114 63L125 36V21M116 13V21H134V13"/><circle cx="35" cy="96" r="5"/><circle cx="24" cy="63" r="5"/><circle cx="125" cy="96" r="5"/><circle cx="114" cy="63" r="5"/></svg>
+          <strong>Move the {choice} arm by hand.</strong>
+          <small>Its follower copies all six joints and the gripper. Use Up on both {choice} arms first; base headings must match.</small>
+          <div class="switch-row">
+            <span>{running ? 'Following' : 'Enable puppet mode'}</span>
+            {#if running}<Stopwatch remaining={state?.remaining_s ?? 60} unlimited={!!state?.unlimited} onclick={() => { unlimitedRequested = true; }} />{/if}
+            <button class="switch" role="switch" aria-checked={running} aria-label={`Enable ${choice} puppet mode`} disabled={!confirmed || pending || (!running && (occupied || state?.mode !== 'ready'))} onclick={() => running ? stop() : start('puppet', undefined, choice)}><span></span></button>
+          </div>
+        </article>
+      {/each}
+    </div>
   </section>
   {#if pairState?.limited?.length}<div class="limit-notice" role="status">{#each pairState.limited as limit}<p>{jointNames[limit.joint]}: {limit.joint === 6 ? `${(limit.requested*1000).toFixed(1)} mm` : degrees(limit.requested)} requested, {limit.joint === 6 ? `${(limit.bounded*1000).toFixed(1)} mm` : degrees(limit.bounded)} held ({limit.kind}).</p>{/each}</div>{/if}
   {#if error || presets?.error || pairState?.error}<p class="error-banner" role="alert">{error || presets?.error || pairState?.error}</p>{/if}

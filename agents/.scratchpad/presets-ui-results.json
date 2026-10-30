@@ -1,0 +1,156 @@
+{
+  "actions": [
+    {
+      "kind": "presets",
+      "action": "start",
+      "role": "follower_left",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 1
+    },
+    {
+      "kind": "presets",
+      "action": "hold",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 2
+    },
+    {
+      "kind": "presets",
+      "action": "hold",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 3
+    },
+    {
+      "kind": "presets",
+      "action": "hold",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 4
+    },
+    {
+      "kind": "presets",
+      "action": "hold",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 5
+    },
+    {
+      "kind": "presets",
+      "action": "stop",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 6
+    },
+    {
+      "kind": "presets",
+      "action": "start",
+      "role": "follower_right",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 7
+    },
+    {
+      "kind": "presets",
+      "action": "hold",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 8
+    },
+    {
+      "kind": "presets",
+      "action": "stop",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 9
+    },
+    {
+      "kind": "presets",
+      "action": "start",
+      "role": "leader_left",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 10
+    },
+    {
+      "kind": "presets",
+      "action": "hold",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 11
+    },
+    {
+      "kind": "presets",
+      "action": "stop",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 12
+    },
+    {
+      "kind": "presets",
+      "action": "start",
+      "role": "leader_right",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 13
+    },
+    {
+      "kind": "presets",
+      "action": "hold",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 14
+    },
+    {
+      "kind": "presets",
+      "action": "stop",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 15
+    },
+    {
+      "kind": "puppet",
+      "action": "arm",
+      "side": "left",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 16
+    },
+    {
+      "kind": "puppet",
+      "action": "hold",
+      "side": "left",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 17
+    },
+    {
+      "kind": "puppet",
+      "action": "unlimited",
+      "side": "left",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 18
+    },
+    {
+      "kind": "puppet",
+      "action": "stop",
+      "side": "left",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 19
+    },
+    {
+      "kind": "puppet",
+      "action": "arm",
+      "side": "right",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 20
+    },
+    {
+      "kind": "puppet",
+      "action": "hold",
+      "side": "right",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 21
+    },
+    {
+      "kind": "puppet",
+      "action": "unlimited",
+      "side": "right",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 22
+    },
+    {
+      "kind": "puppet",
+      "action": "stop",
+      "side": "right",
+      "client": "c8432e7c-289e-45ad-8aa8-44eee2ae8b88",
+      "sequence": 23
+    }
+  ],
+  "errors": [],
+  "hardwareCommands": 0
+}

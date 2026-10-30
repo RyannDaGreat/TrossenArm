@@ -14,6 +14,7 @@ agents/.scratchpad/logs/*.log
 
 # Local camera captures and derived video frames.
 agents/.scratchpad/*.png
+agents/.scratchpad/*.jpg
 agents/.scratchpad/*.mp4
 agents/.scratchpad/frames/
 agents/.scratchpad/upright-test/
@@ -28,3 +29,9 @@ agents/.scratchpad/upright-stage-*.png
 web/source/frontend/dist/
 agents/.scratchpad/browser-profile/
 agents/.scratchpad/*-verification.json
+
+# Local archives, isolated implementation copies and rebuilt assets.
+/TrossenRobotArm.zip
+agents/.scratchpad/forks/
+agents/.scratchpad/independent-ui/
+**/dist/

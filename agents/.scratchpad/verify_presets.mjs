@@ -21,6 +21,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true,
   args: ['--enable-webgl', '--enable-unsafe-swiftshader'], defaultViewport: { width: 1440, height: 1080 } });
 const actions = [], errors = [];
+let rejectRight = false;
 const fake = { puppet: { mode: 'ready', enabled: false, active: false, stop_pending: false, stop_confirmed: true },
   presets: { mode: 'ready', role: null, active: false, stop_confirmed: true, available: ['follower_left', 'follower_right', 'leader_left', 'leader_right'] }, cameras: {}, arms: {} };
 fake.puppet_right = {...fake.puppet};
@@ -42,6 +43,11 @@ try {
           if (body.action === 'stop') Object.assign(fake.presets, {role:null, mode:'ready', active:false, stop_confirmed:true});
         } else {
           const pair = body.side === 'right' ? fake.puppet_right : fake.puppet;
+          if (rejectRight && body.side === 'right' && body.action === 'hold') {
+            Object.assign(pair, {enabled:false, active:false, mode:'ready', error:'Use Up on both right arms first: upright, wrists reset, grippers open'});
+            await request.respond({status:409, contentType:'application/json', body:JSON.stringify({detail:'Puppet mode is not armed'})});
+            return;
+          }
           if (body.action === 'arm') Object.assign(pair, {enabled:true, active:true, mode:'active', remaining_s:60});
           if (body.action === 'unlimited') Object.assign(pair, {unlimited:true, remaining_s:null});
           if (body.action === 'stop') Object.assign(pair, {enabled:false, active:false, mode:'ready'});
@@ -56,6 +62,10 @@ try {
   await page.click('.control-launch');
   assert.equal(await page.$$('article.puppet-card').then(cards => cards.length), 2);
   assert.equal(await page.$('select'), null);
+  assert(await page.$eval('.puppet-section', e=>e.open));
+  await page.click('.puppet-section summary');
+  assert(!(await page.$eval('.puppet-section', e=>e.open)));
+  await page.click('.puppet-section summary');
   assert(!(await page.$eval('.preset-section', e=>e.open)));
   await page.click('.preset-section summary');
   const left = '[aria-label="Left follower up"]', right = '[aria-label="Right follower up"]', puppet = '[aria-label="Enable left puppet mode"]';

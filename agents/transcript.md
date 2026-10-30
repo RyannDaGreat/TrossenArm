@@ -239,3 +239,5 @@ User: "Explain out loud why the arm keeps pausing and moving bit by bit when not
 User: “You can put this in the manifest, the assumption that the movement path will basically always be clear for the leaders. They’re literally sticking out in the middle of nowhere. I’ll take a picture for you. Maybe you’ll understand better.”
 
 User: “If you want to rename these and copy them into the repository as reference images, by all means please do that. It will probably save you effort in the future. You can reference them in the manifest.”
+
+User: “Oh, actually no, they’re all good. They’re all mounted the same way. You can write that down. They’re mounted such that when you do this, they do all need to face north. Don’t forget that. The manifest can record it.”

@@ -87,3 +87,5 @@
 - [x] Power-cycle recovery restart complete: PID62919, all four arms fresh/idle/noerror, four cameras fresh. Rest-pose definition remains under investigation.
 - [x] Fix Up targets to align each pair's base encoder angles; fourteen preset tests and concurrent owner regressions passed.
 - [ ] Deploy base-aligned Up after backend restart authorization; verify fresh ready state without automatic motion.
+
+- [x] Execute updated Up on all four arms; verify idle/noerror and record operator confirmation that all four face north.

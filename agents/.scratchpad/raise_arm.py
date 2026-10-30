@@ -1,11 +1,13 @@
 """Staged upright experiment: one driver owner, visual approval between quarter-waypoints."""
 import json
+import math
 import os
 from pathlib import Path
 import sys
 import time
 
 from PIL import Image
+import cv2
 import trossen_arm as arm
 
 import robot_camera
@@ -13,14 +15,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "web/source/backend
 from geometry import forward
 
 ROLE = os.environ.get("TROSSEN_MOTION_ROLE")
-if ROLE is not None and ROLE not in {"leader_left", "leader_right", "follower_right"}:
+if ROLE is not None and ROLE not in {"leader_left", "leader_right", "follower_right", "follower_left"}:
     raise ValueError(f"Unsupported motion role: {ROLE}")
-SCRATCH = Path("agents/.scratchpad") / (f"{ROLE}-motion" if ROLE else "")
+POSE = os.environ.get("TROSSEN_MOTION_POSE", "upright")
+if POSE not in {"upright", "tall", "north"}:
+    raise ValueError(f"Unknown pose: {POSE}")
+SCRATCH = Path("agents/.scratchpad") / (f"{ROLE}-{POSE}-motion" if POSE != "upright" else f"{ROLE}-motion" if ROLE else "")
 APPROVAL = SCRATCH / "upright-approval.txt"
-STAGE_SECONDS = 8.0
+STAGE_SECONDS = float(os.environ.get("TROSSEN_STAGE_SECONDS", "8"))
+MIN_STAGE_SECONDS = 8 / 3  # User-authorized maximum speed increase over the verified 8-second stages.
+if not math.isfinite(STAGE_SECONDS) or not MIN_STAGE_SECONDS <= STAGE_SECONDS <= 8:
+    raise ValueError("Stage duration must be between 8/3 and 8 seconds")
 CHECK_SECONDS = 0.05  # 20 Hz controller-error and stop checks.
 APPROVAL_TIMEOUT_SECONDS = 300.0  # Never leave an unattended position hold indefinitely.
 JOINT_ERROR_RAD = 0.03  # About 1.7 degrees of final joint agreement.
+CAMERA_WIDTH, CAMERA_HEIGHT = 640, 480  # Verified four-camera USB profile on both Macs.
 
 
 def snapshots(stage):
@@ -34,10 +43,14 @@ def snapshots(stage):
     """
     devices = robot_camera.discover()
     bottom = robot_camera.select_camera([device for device in devices if device.get("serial") is None])
-    for role, serial, uid in (("top", "418643070452", None), ("bottom", None, bottom["uid"])):
-        with robot_camera.open_camera(serial, uid) as camera:
+    views = [("top", "418643070452", None), ("bottom", None, bottom["uid"])]
+    if POSE == "north":
+        views.append(("wrist", "418643070450" if ROLE == "follower_left" else "418643070460", None))
+    for role, serial, uid in views:
+        with robot_camera.open_camera(serial, uid, width=CAMERA_WIDTH, height=CAMERA_HEIGHT) as camera:
             path = SCRATCH / f"upright-stage-{stage}-{role}.png"
-            Image.fromarray(robot_camera.read_rgb(camera)).save(path)
+            bgr = robot_camera.read_bgr(camera, CAMERA_WIDTH, CAMERA_HEIGHT)
+            Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)).save(path)
             print(f"Review image: {path}", flush=True)
 
 
@@ -59,14 +72,18 @@ def run():
         current = list(driver.get_arm_positions())
         assert list(driver.get_modes()) == [arm.Mode.idle] * 7
         assert driver.get_error_information() == "No error"
-        for index, (value, limit) in enumerate(zip(current, driver.get_joint_limits()[:6])):
+        limits = driver.get_joint_limits()[:6]
+        for index, (value, limit) in enumerate(zip(current, limits)):
             if not limit.position_min-limit.position_tolerance <= value <= limit.position_max+limit.position_tolerance:
                 raise RuntimeError(f"Joint {index} starts outside factory bounds: {value}")
         assert max(abs(a-b) for a, b in zip(current, plan["start"])) < JOINT_ERROR_RAD
         snapshots(0)
+        initial = [max(limit.position_min, min(value, limit.position_max))
+                   for value, limit in zip(current, limits)]
+        print("Initial in-bound target:", initial, "from measured:", current, flush=True)
         # Activate once; never re-enable with a potentially stale target between stages.
         driver.set_arm_modes(arm.Mode.position)
-        driver.set_arm_positions(current, 2.0, True)
+        driver.set_arm_positions(initial, 2.0, True)
         for stage, fraction in enumerate(plan["fractions"], 1):
             deadline = time.monotonic() + APPROVAL_TIMEOUT_SECONDS
             print(f"Waiting for approval {stage}; all arm joints held, gripper idle.", flush=True)

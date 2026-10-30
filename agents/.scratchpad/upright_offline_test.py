@@ -10,7 +10,7 @@ import trossen_arm as arm
 
 folder = Path("agents/.scratchpad/upright-test")
 folder.mkdir(exist_ok=True)
-plan = json.loads(Path("agents/.scratchpad/upright-plan.json").read_text())
+plan = json.loads((raise_arm.SCRATCH / "upright-plan.json").read_text())
 (folder / "upright-plan.json").write_text(json.dumps(plan))
 robot = Mock()
 state = {"q": plan["start"], "mode": arm.Mode.idle}
@@ -52,7 +52,8 @@ def approval():
 
 
 robot.get_joint_limits.return_value = [SimpleNamespace(position_min=lo, position_max=hi,
-                                                     position_tolerance=0.02) for lo, hi in plan["limits"]]
+                                                     position_tolerance=tolerance)
+    for (lo, hi), tolerance in zip(plan["limits"], plan.get("position_tolerances", [0.02] * 6))]
 robot.get_arm_positions.side_effect = positions
 robot.get_modes.side_effect = modes
 robot.set_arm_positions.side_effect = set_positions
@@ -65,10 +66,14 @@ with patch.object(raise_arm, "SCRATCH", folder), patch.object(raise_arm, "APPROV
      patch.object(raise_arm, "snapshots") as images, \
      patch.object(raise_arm.time, "monotonic", side_effect=itertools.count(0, 10)):
     raise_arm.run()
-assert robot.set_arm_positions.call_count == 5
+assert robot.set_arm_positions.call_count == len(plan["fractions"]) + 1
+assert all(lo <= value <= hi for value, (lo, hi) in
+           zip(robot.set_arm_positions.call_args_list[0].args[0], plan["limits"]))
+assert all(call.args[1] == raise_arm.STAGE_SECONDS
+           for call in robot.set_arm_positions.call_args_list[1:])
 assert state["mode"] == arm.Mode.idle
 robot.set_gripper_mode.assert_not_called()
 robot.cleanup.assert_called_once()
-assert images.call_count == 5
-assert json.loads((folder / "upright-status.json").read_text())["stage"] == 4
-print("PASS: all four mocked stages, continuous owner, gripper unchanged, final idle/cleanup.")
+assert images.call_count == len(plan["fractions"]) + 1
+assert json.loads((folder / "upright-status.json").read_text())["stage"] == len(plan["fractions"])
+print("PASS: all planned mocked stages, continuous owner, gripper unchanged, final idle/cleanup.")

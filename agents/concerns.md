@@ -140,3 +140,11 @@ Both north turns completed in one eight-second trajectory each. Left q0=1.591706
 UI fork commits integrated: d0e362f and a62c23b. Delegate verified mocked API/owner tests, build, Puppeteer with every POST intercepted. No live preset invocation. Documentation patch initially failed due changed context; appended the current preset section explicitly. Local fetch first assumed nonexistent master branch; fetching HEAD succeeded.
 
 - Updated viewer opened at http://127.0.0.1:28347/?session=north, process81752. Four feeds measured29.996–30.096drawn fps over20sec, all four arms ready/idle, no JS errors. Root reran12mocked preset tests successfully. New preset hardware path remains untested; no automated button press.
+
+## 2026-10-29 — leader copy preparation
+Current four snapshots leader-before-{top,bottom,left,right}.jpg in agents/.scratchpad/ contain no visible leader arms. Did not activate or stop dashboard. Leader-copy-preview.json saves six-joint targets within nominal leader limits. Camera tilt requested, because prior follower views cannot observe these new motion paths.
+
+## 2026-10-29 21:33 — leaders copied and operator reference photos
+Both leader copies completed, endpoint errors below0.001rad, final seven idle/No error. Right initial wrist feedback−1.8816rad was within nominal±0.4rad tolerance; initial clamped target moved it to nominal bound before main trajectory. Earlier nominal-bound activation prohibition and camera re-aim gate were obsolete; removed from current manifest. User confirmed standing clear leader paths and supplied four photos showing outward mounts; retained originals under agents/reference-images with descriptive names. Photos precede the completed leader moves. Lesson: do not repeatedly request already supplied clearance solely because fixed views omit leaders.
+
+Dashboard restored and opened after leader motion. Puppeteer verified all four feeds at30.05 drawnFPS over20sec, all four arms ready/idle, no JavaScript errors. First browser check lacked CHROME_BIN and failed explicitly before browser startup; rerun with the known Chrome path passed.

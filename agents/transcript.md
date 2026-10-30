@@ -233,3 +233,9 @@ User: "The duck's beak defines north, the direction the fixed cameras point. Use
 User: "Don't slow down the height task. Get the arms high and tall as fast as possible; have a sub-agent work out the cardinal directions meanwhile."
 
 User: "Explain out loud why the arm keeps pausing and moving bit by bit when nothing is next to it. Is it because you don't know how the robot moves?"
+
+## 2026-10-29 — leader clearance and reference photographs
+
+User: “You can put this in the manifest, the assumption that the movement path will basically always be clear for the leaders. They’re literally sticking out in the middle of nowhere. I’ll take a picture for you. Maybe you’ll understand better.”
+
+User: “If you want to rename these and copy them into the repository as reference images, by all means please do that. It will probably save you effort in the future. You can reference them in the manifest.”

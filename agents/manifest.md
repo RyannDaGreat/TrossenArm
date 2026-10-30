@@ -10,7 +10,7 @@ Do not auto-enable following. The viewer owns four cameras and all robot telemet
 
 **Verified:** four live camera feeds, live encoder-driven geometry for all four arms, right-follower small/full gripper cycles, and a staged sky-facing right-follower pose. The dashboard was tested with Puppeteer, visually inspected, opened in the browser, and announced through both channels. A 20-second browser test measured approximately 30 drawn frames/second for each camera; exact results are in `agents/.scratchpad/web-verification.json`. This is not a long-duration soak or exposure-to-screen latency certification.
 
-**Pending:** left-pair puppeteering is implemented and the user's physical trial moved the follower, but it stopped on the software measured-velocity guard; this is not yet a reliable completed trial. The final 60 ms target-interpolation adjustment and detailed speed diagnostics are offline-tested only, not live-tested. Do not restart it automatically. Powered leaders reaching a verified 90-degree/L pose remain incomplete. A static four-view environment inventory exists; no 360-degree arm sweep or calibrated room map exists. Full-stroke video replay still needs its own final VLM/Finder delivery check.
+**Pending:** left-pair puppeteering is implemented and the user's physical trial moved the follower, but it stopped on the software measured-velocity guard; this is not yet a reliable completed trial. The final 60 ms target-interpolation adjustment and detailed speed diagnostics are offline-tested only, not live-tested. Do not restart it automatically. Both leaders copied the raised follower joint poses on 2026-10-29, with verified feedback and final idle/no error. A static four-view environment inventory exists; no 360-degree arm sweep or calibrated room map exists. Full-stroke video replay still needs its own final VLM/Finder delivery check.
 
 # Glossary
 
@@ -142,7 +142,7 @@ Scripts: `prepare_upright.py` (configuration/readback + offline model checks), `
 
 Both `.2` and `.3` return joint readings. Manufacturer-supported position mode and gravity-compensated external-effort mode are documented. Reference home/L candidate is `[0,π/2,π/2,0,0,0]`; preserve base yaw/tool roll when deliberately reducing unnecessary rotation. This is not proof of swept-volume safety.
 
-Right leader `.2` wrist yaw read approximately −1.8553 rad, outside its reported −π/2 bound. **Do not activate it or widen bounds.** Left leader `.3` completed one observed quarter-stage, shoulder/elbow about 22.5°; returned idle/no error. Stopped before completing the 90° goal because current camera views did not establish clearance of the leader-handle trajectory. The central white tabletop gripper assemblies must not be assumed to be leader arm bases. No 90° success notification was sent. Human hands must leave handles before powered position moves; gravity-compensated teaching is different and must be explicitly enabled under operator control.
+Both leaders completed follower-pose copies on 2026-10-29. Right leader initial wrist yaw −1.8816 rad was inside the factory feedback allowance (nominal minimum −π/2, tolerance0.4 rad); all commanded targets stayed inside nominal bounds. Both completed one eight-second main trajectory and returned seven idle modes with No error. Human hands must leave handles before powered motion.
 
 # Left-pair teleoperation — implemented; live trial incomplete
 
@@ -189,7 +189,7 @@ None.
 
 The current left-follower request and verified limit interpretation are defined near the top in Goal and current state and Offline reference. Do not widen limits, clear faults, or activate beyond factory feedback tolerance. Keep one driver owner and inspect stage images.
 
-Use explicit 640x480 capture for recordings and staged snapshots on this Mac. Reuse the existing guarded gripper exercise when gripper motion is requested; no intermediate speech and no unknown-fault clearing. This lift targets only the left follower; leave the leaders unchanged. Prefix every user-facing message and eventual speech with Marvin.
+Use explicit 640x480 capture for recordings and staged snapshots on this Mac. Reuse the existing guarded gripper exercise when gripper motion is requested; no intermediate speech and no unknown-fault clearing. Motion scope follows the current user request; both follower lifts and subsequent leader copies are complete. Prefix every user-facing message and eventual speech with Marvin.
 
 ## Verified outcome on 2026-10-29
 
@@ -214,3 +214,19 @@ North is the duck's beak direction, toward the wall/rear crossbar and top of the
 The operator wants a Swiss-style Robot controls panel with illustrated Left arm up and Right arm up actions alongside puppet mode. Use a clear grid, restrained colors, strong type hierarchy, concise labels and simple SVG arm diagrams. Record later design preferences here as they emerge. The presets raise a follower toward the validated tall pose in one eight-second interpolation, keeping its current base yaw and tool roll: encoder zero is not a verified north heading. Wrist yaw becomes zero for a vertical tool. A preset and puppet mode cannot own motion concurrently. Browser intent is ordered, expires after 0.5 seconds without heartbeat, and stops on blur, close or Stop. Only the existing SDK-owner thread writes motors. Limits stay unchanged; faults never auto-clear; uncertain stops remain explicit. Hardware behavior still requires a supervised live validation after offline tests.
 
 Implementation: `web/source/backend/presets.py` owns ordered preset intent; `LeftPair` and right-arm telemetry call it on their existing motor-owner threads. A shared reentrant lock makes puppet/preset reservations atomic. The pure tall-target function uses the actual elbow maximum and local WXAI DH dimensions; tests reproduce 0.853447555 m tool height. The modal has illustrated follower cards, a separate puppet row and a sticky Stop button. Offline checks: `agents/.scratchpad/presets_offline_test.py` (12 mocked tests plus geometry doctest) and `agents/.scratchpad/verify_presets.mjs` (isolated static fixture; every control POST intercepted). Build with the existing frontend npm script. No added dependencies.
+
+## Leader copies of tall followers
+
+Both leaders copied their matching follower six-joint poses on 2026-10-29; grippers stayed idle. Maximum endpoint joint error was below0.001rad. Tool heights were0.852276m left and0.852356m right, relative to each base. Both final states: seven idle modes, No error. Joint-coordinate copying does not establish world compass alignment when mount registration differs. Evidence: `agents/.scratchpad/leader_left-copy-motion/`, `agents/.scratchpad/leader_right-copy-motion/`, and `agents/.scratchpad/logs/leader-left-copy-20261029.log` / `leader-right-copy-20261029.log`.
+
+## Standing leader-clearance assumption and reference photographs
+
+The user states that the leader movement paths will basically always be clear: the leaders project outward into open room space. For the current installation, treat ordinary requested leader motions as cleared by the operator; do not repeatedly ask for clearance or require fixed-camera re-aiming merely because leaders are outside those camera views. Reassess if the installation changes or current evidence shows a person or obstacle entering the intended path. Retain factory joint limits, fault checks and exclusive motor ownership.
+
+User-supplied photos were reviewed and copied without alteration:
+- [Oblique rig view](reference-images/rig-oblique-leaders-outside-frame.jpeg): leaders project outside the front frame; raised followers are behind them.
+- [Front clearance view](reference-images/rig-front-leader-clearance.jpeg): shows both leader mounts and surrounding open space.
+- [Opposite oblique view](reference-images/rig-opposite-oblique.jpeg): confirms the rig arrangement from the other side.
+- [Controller labels](reference-images/controller-role-ip-labels.jpeg): leader right192.168.1.2, follower right192.168.1.4, leader left192.168.1.3, follower left192.168.1.5.
+
+Source filenames: IMG_2088.jpeg through IMG_2091.jpeg in that order. These photos document the installation before the leader copies, not the completed leader pose. Nearby frame members and cables remain part of the installation; the images are not a calibrated collision model.

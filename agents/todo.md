@@ -50,7 +50,15 @@
 ## Remaining requested work
 
 - [ ] Final VLM/Finder replay delivery for the separate full-stroke video `gripper-full-stroke-20261028-212658.mp4`.
-- [ ] Verified 90°/L-shaped leaders: left reached only ~22.5° before a clearance pause; right has an out-of-configured-bound wrist reading. Do not claim completion or activate right leader blindly.
+- [x] Leader L-pose request superseded by completed tall follower-pose copies on both leaders.
 - [ ] Optional actual robot-model rendering and wireframe/model toggle. Official asset research is complete; rendering is not implemented.
 - [ ] Calibrated environment mapping or safe 360° scan. Only a static four-view inventory exists; no blind arm sweep.
 - [ ] Long-duration streaming soak and real Windows/Linux camera verification.
+
+## Current request — leader pose copies
+- [x] Read current leader/follower joints and validate follower targets against leader nominal limits.
+- [x] User explicitly confirmed leader movement paths clear and instructed motion; existing cameras do not show leaders.
+- [x] Verify actual leader feedback tolerances, copy each follower pose with single control owner, and verify final idle/no error.
+- [x] Save four operator reference photographs and standing leader-clearance assumption in the manifest.
+- [ ] Restore dashboard and report completion.
+- [x] Restore/open dashboard after leader copies; verify four live cameras and four idle arms.

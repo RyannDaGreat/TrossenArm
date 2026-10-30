@@ -79,7 +79,9 @@ class Observatory:
         self.threads = []
         self.presets = Presets(self.stop)
         self.pair = LeftPair(self.stop, self.publish, self.presets)
+        self.right_pair = LeftPair(self.stop, self.publish, self.presets, side="right")
         self.presets.pair = self.pair
+        self.presets.pairs = {"left": self.pair, "right": self.right_pair}
 
     def start(self):
         """Command. Discover four cameras and start capture, encoder and arm-query threads."""
@@ -89,9 +91,8 @@ class Observatory:
             self.launch(self.encode, role, feed)
         for role, ip in ARMS.items():
             self.arms[role] = {"ip": ip, "error": None, "ready": False}
-            if not role.endswith("_left"):
-                self.launch(self.telemetry, role, ip)
         self.launch(self.pair.run)
+        self.launch(self.right_pair.run)
 
     def launch(self, function, *args):
         """
@@ -248,7 +249,7 @@ class Observatory:
                 "arms": {role: ({**state, "ready": False, "error": "Telemetry stale"}
                                 if state.get("ready") and now-state["at"] > 0.5 else dict(state))
                          for role, state in self.arms.items()},
-                "presets": self.presets.snapshot(), "puppet": self.pair.snapshot()}
+                "presets": self.presets.snapshot(), "puppet": self.pair.snapshot(), "puppet_right": self.right_pair.snapshot()}
 
     def close(self):
         """Command. Stop workers and release owned cameras/robot connections."""
@@ -344,6 +345,7 @@ async def camera_stream(websocket: WebSocket, role: str):
 
 class PuppetRequest(BaseModel):
     """Validated intent; never contains arbitrary joint targets or controller addresses."""
+    side: Literal["left", "right"] = "left"
     action: Literal["arm", "hold", "stop", "disarm", "unlimited"]
     client: str = Field(min_length=8, max_length=80)
     sequence: int = Field(ge=1)
@@ -361,10 +363,11 @@ async def puppet_control(body: PuppetRequest, request: Request):
             or request.headers.get("origin") != f"http://127.0.0.1:{request.url.port}"):
         raise HTTPException(403, "Controls require this local dashboard origin")
     try:
-        hub.pair.request(body.action, body.client, body.sequence)
+        pair = hub.pair if body.side == "left" else hub.right_pair
+        pair.request(body.action, body.client, body.sequence)
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
-    return hub.pair.snapshot()
+    return pair.snapshot()
 
 
 class PresetRequest(BaseModel):

@@ -53,6 +53,7 @@ class Presets:
         self.stop = stop
         self.lock = threading.RLock()
         self.pair = None
+        self.pairs = {}
         self.available = set()
         self.client = None
         self.sequences = {}
@@ -86,10 +87,14 @@ class Presets:
             if self.client not in (None, client):
                 raise ValueError("Another browser owns the preset")
             if action == "start":
-                pair = self.pair.snapshot()
+                if role not in ROLES:
+                    raise ValueError("Unknown arm role")
+                pair = self.pairs.get(role.rsplit("_", 1)[-1], self.pair).snapshot()
+                if any(p.enabled or p.stop_pending or p.state["active"] is not False for p in self.pairs.values()):
+                    raise ValueError("Stop puppet mode before starting a preset")
                 if self.busy() or pair["enabled"] or pair["stop_pending"] or pair["active"] is not False:
                     raise ValueError("Stop the current control mode before starting a preset")
-                if role not in self.available or (role in ("follower_left", "leader_left") and pair["mode"] != "ready"):
+                if role not in self.available or (pair["mode"] != "ready"):
                     raise ValueError("Arm is not ready")
                 self.client = client
                 self.generation += 1

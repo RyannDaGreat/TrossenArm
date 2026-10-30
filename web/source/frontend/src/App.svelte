@@ -31,7 +31,7 @@
 <svelte:head><meta name="description" content="Four live robot cameras and encoder-driven WXAI geometry." /></svelte:head>
 <header class="masthead">
   <div><p class="eyebrow">TROSSEN / LAB OBSERVATORY</p><h1>See what the robots see.</h1></div>
-  <div class="connection"><strong>{error ? 'CONNECTION ERROR' : status ? 'LIVE SYSTEM' : 'CONNECTING'}</strong><span>Target 30 fps per camera · operator-held left-pair controls</span><Controls state={status?.puppet} presets={status?.presets} arms={status?.arms} /></div>
+  <div class="connection"><strong>{error ? 'CONNECTION ERROR' : status ? 'LIVE SYSTEM' : 'CONNECTING'}</strong><span>Target 30 fps per camera · operator-held left / right controls</span><Controls state={status?.puppet} rightState={status?.puppet_right} presets={status?.presets} arms={status?.arms} /></div>
 </header>
 {#if error}<p class="error-banner">{error} · Last update {updated ? new Date(updated).toLocaleTimeString() : 'none'}</p>{/if}
 <main>

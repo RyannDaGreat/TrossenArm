@@ -2,7 +2,9 @@
   import { onMount } from 'svelte';
   import Stopwatch from './widgets/Stopwatch/Stopwatch.svelte';
   let unlimitedRequested = $state(false);
-  let { state: pairState, presets, arms } = $props();
+  let { state: leftState, rightState, presets, arms } = $props();
+  let side = $state("left");
+  let pairState = $derived(side === "left" ? leftState : rightState);
   let dialog;
   let confirmed = $state(false);
   let control = $state(null);
@@ -22,7 +24,7 @@
   /** Command. Queue ordered intent. @param {string} kind API control. @param {string} action Intent. @param {string} [role] Arm. @returns {Promise<object>} State. */
   async function send(kind, action, role) {
     const response = await fetch(`/api/${kind}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(requestTimeoutMs), body: JSON.stringify({ action, role, client, sequence: ++sequence }) });
+      signal: AbortSignal.timeout(requestTimeoutMs), body: JSON.stringify({ action, role, ...(kind === "puppet" ? {side} : {}), client, sequence: ++sequence }) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.detail || `Control HTTP ${response.status}`);
     return result;
@@ -79,7 +81,7 @@
       generation++;
       const kind = control || (presets?.role ? 'presets' : pairState?.enabled ? 'puppet' : null);
       if (kind && !navigator.sendBeacon(`/api/${kind}`, new Blob([
-        JSON.stringify({ action: 'stop', client, sequence: ++sequence })
+        JSON.stringify({ action: 'stop', ...(kind === 'puppet' ? {side} : {}), client, sequence: ++sequence })
       ], { type: 'application/json' }))) console.error('Exit stop was not queued; heartbeat timeout remains active');
       control = null; clearInterval(timer);
     }
@@ -92,7 +94,7 @@
 <button class="control-launch" onclick={open}>Robot controls <span>↗</span></button>
 <dialog bind:this={dialog} class="control-modal" oncancel={(event) => { event.preventDefault(); close(); }}>
   <header><div><p class="eyebrow">TROSSEN / OPERATOR CONTROL</p><h2>Choose a movement.</h2></div><button class="icon-button" onclick={close} aria-label="Close robot controls">×</button></header>
-  <div class="control-state" class:active={visibleState?.active} role="status"><span>{presets?.role?.replaceAll('_', ' ') || 'Left puppet pair'} / {visibleState?.mode ?? 'connecting'}</span><span>{visibleState?.mode === 'stop_unconfirmed' ? 'USE PHYSICAL STOP' : visibleState?.active ? visibleState.unlimited ? 'No time limit' : `${Math.ceil(visibleState.remaining_s ?? 0)} seconds left` : visibleState?.stop_confirmed ? 'Idle confirmed' : 'Awaiting owner'}</span></div>
+  <div class="control-state" class:active={visibleState?.active} role="status"><span>{presets?.role?.replaceAll('_', ' ') || `${side} puppet pair`} / {visibleState?.mode ?? 'connecting'}</span><span>{visibleState?.mode === 'stop_unconfirmed' ? 'USE PHYSICAL STOP' : visibleState?.active ? visibleState.unlimited ? 'No time limit' : `${Math.ceil(visibleState.remaining_s ?? 0)} seconds left` : visibleState?.stop_confirmed ? 'Idle confirmed' : 'Awaiting owner'}</span></div>
   <button class="stop-control" onclick={stop}>STOP MOVEMENT</button>
   <div class="switch-row"><div><strong>Workspace clear</strong><small>I can see the arm path and reach the physical power stop.</small></div>
     <button class="switch" role="switch" aria-checked={confirmed} aria-label="Confirm operator and workspace clearance" onclick={() => { confirmed = !confirmed; if (!confirmed) stop(); }}><span></span></button></div>
@@ -110,7 +112,8 @@
     <p class="notice">Raises one selected arm with its tool pointing vertically up. Base yaw stays as it is; wrist yaw and tool roll reset to zero and the gripper opens. North is not calibrated in these presets.</p>
   </details>
   <section class="puppet-section" aria-label="Puppet mode">
-    <div class="switch-row"><div><p class="eyebrow">PUPPET MODE</p><strong>Move the left arm by hand.</strong><small>Leader left .3 → follower left .5. Absolute angles and gripper opening. Use Up on both left arms first; base headings must match.</small></div>
+    <label>Arm pair <select aria-label="Puppet arm pair" bind:value={side} disabled={occupied}><option value="left">Left</option><option value="right">Right</option></select></label>
+    <div class="switch-row"><div><p class="eyebrow">PUPPET MODE</p><strong>Move the {side} arm by hand.</strong><small>Leader {side} .{side === "left" ? "3" : "2"} → follower {side} .{side === "left" ? "5" : "4"}. Absolute angles and gripper opening. Use Up on both {side} arms first; base headings must match.</small></div>
       {#if control === 'puppet' || pairState?.enabled}<Stopwatch remaining={pairState?.remaining_s ?? 60} unlimited={!!pairState?.unlimited} onclick={() => { unlimitedRequested = true; }} />{/if}
       <button class="switch" role="switch" aria-checked={control === 'puppet' || !!pairState?.enabled} aria-label="Enable puppet mode" disabled={!confirmed || pending || !!presets?.role || control === 'presets' || !pairState || (!pairState.enabled && pairState.mode !== 'ready')} onclick={() => control === 'puppet' || pairState?.enabled ? stop() : start('puppet')}><span></span></button></div>
   </section>
@@ -118,7 +121,7 @@
   {#if error || presets?.error || pairState?.error}<p class="error-banner" role="alert">{error || presets?.error || pairState?.error}</p>{/if}
   <details class="limit-details"><summary>Movement limits and stopping</summary>
     <p class="notice">Only one mode moves at a time. Closing this panel, leaving the page, losing focus or losing heartbeat stops movement. Click the stopwatch to remove the 60-second session limit. Puppet mode catches up at up to 29°/s and 20 mm/s gripper speed within controller limits. Presets use unchanged controller limits; tiny initial bound corrections up to 0.12° may occur.</p>
-    {#each arms?.follower_left?.limits ?? [] as limit, index}<div class="limit-row"><span>{jointNames[index]}</span><span>{degrees(arms.follower_left.joints[index])}</span><span>{degrees(limit.min)} to {degrees(limit.max)}</span></div>{/each}
+    {#each arms?.[`follower_${side}`]?.limits ?? [] as limit, index}<div class="limit-row"><span>{jointNames[index]}</span><span>{degrees(arms[`follower_${side}`].joints[index])}</span><span>{degrees(limit.min)} to {degrees(limit.max)}</span></div>{/each}
     <p class="notice">These limits do not detect obstacles. A blocked process or SDK call can delay stopping. Use the physical power stop if idle cannot be confirmed.</p>
   </details>
 </dialog>

@@ -25,6 +25,11 @@ async def test():
             response = await client.post("/api/puppet", json=body, headers={"Origin": "http://127.0.0.1:28347"})
             assert response.status_code == 200, response.text
             pair.request.assert_called_once_with("arm", "offline-client", 1)
+            with patch.object(server.hub, 'right_pair') as right:
+                right.snapshot.return_value = {'mode':'ready'}
+                response = await client.post('/api/puppet',json={**body,'side':'right'},headers={'Origin':'http://127.0.0.1:28347'})
+                assert response.status_code == 200
+                right.request.assert_called_once_with('arm','offline-client',1)
             pair.request.side_effect = ValueError("Pair not ready")
             assert (await client.post("/api/puppet", json=body,
                                       headers={"Origin": "http://127.0.0.1:28347"})).status_code == 409

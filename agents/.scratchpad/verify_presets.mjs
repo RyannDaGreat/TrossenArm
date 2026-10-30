@@ -23,6 +23,7 @@ const browser = await puppeteer.launch({ executablePath: '/Applications/Google C
 const actions = [], errors = [];
 const fake = { puppet: { mode: 'ready', enabled: false, active: false, stop_pending: false, stop_confirmed: true },
   presets: { mode: 'ready', role: null, active: false, stop_confirmed: true, available: ['follower_left', 'follower_right', 'leader_left', 'leader_right'] }, cameras: {}, arms: {} };
+fake.puppet_right = {...fake.puppet};
 for (const role of ['follower_left', 'follower_right', 'leader_left', 'leader_right']) fake.arms[role] = { ready: true, joints: [0,0,0,0,0,0], modes: Array(7).fill('idle'), fk_error_m: 0,
   points: Array.from({length:9}, (_,i) => [0,0,i/10]), tool: [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]], limits: [] };
 try {
@@ -40,9 +41,10 @@ try {
           if (body.action === 'start') Object.assign(fake.presets, {role: body.role, mode:'moving', active:true, stop_confirmed:false, remaining_s:8});
           if (body.action === 'stop') Object.assign(fake.presets, {role:null, mode:'ready', active:false, stop_confirmed:true});
         } else {
-          if (body.action === 'arm') Object.assign(fake.puppet, {enabled:true, active:true, mode:'active', remaining_s:60});
-          if (body.action === 'unlimited') Object.assign(fake.puppet, {unlimited:true, remaining_s:null});
-          if (body.action === 'stop') Object.assign(fake.puppet, {enabled:false, active:false, mode:'ready'});
+          const pair = body.side === 'right' ? fake.puppet_right : fake.puppet;
+          if (body.action === 'arm') Object.assign(pair, {enabled:true, active:true, mode:'active', remaining_s:60});
+          if (body.action === 'unlimited') Object.assign(pair, {unlimited:true, remaining_s:null});
+          if (body.action === 'stop') Object.assign(pair, {enabled:false, active:false, mode:'ready'});
         }
         await request.respond({status:200,contentType:'application/json',body:JSON.stringify(fake[kind])});
       } else if (request.url().endsWith('/api/status')) await request.respond({status:200,contentType:'application/json',body:JSON.stringify(fake)});
@@ -89,6 +91,17 @@ try {
   assert(actions.some(x => x.action === 'unlimited'));
   await page.click('[aria-label="Close robot controls"]');
   await page.waitForFunction(() => !window.__observatory.status.puppet.enabled);
+  await page.click('.control-launch');
+  await page.click('[aria-label="Confirm operator and workspace clearance"]');
+  await page.select('[aria-label="Puppet arm pair"]','right');
+  await page.click(puppet);
+  await page.waitForFunction(() => window.__observatory.status.puppet_right.enabled);
+  await page.click('[aria-label="Turn off puppet time limit"]');
+  await page.waitForFunction(() => window.__observatory.status.puppet_right.unlimited);
+  await page.click('.stop-control');
+  await page.waitForFunction(() => !window.__observatory.status.puppet_right.enabled);
+  assert(actions.some(x => x.kind === 'puppet' && x.side === 'right' && x.action === 'arm'));
+  await page.click('[aria-label="Close robot controls"]');
   await page.setViewport({width:390,height:844});
   await page.click('.control-launch');
   assert(await page.$eval('dialog', e => e.getBoundingClientRect().width <= innerWidth));

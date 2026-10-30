@@ -156,6 +156,7 @@ class Tests(unittest.TestCase):
         """Command. Exercise the actual right owner loop with a fake SDK; API queues only."""
         hub = server.Observatory()
         hub.pair.set_state(mode='ready')
+        hub.right_pair.set_state(mode='ready')
         driver = Mock()
         for method in ('get_error_information', 'get_all_positions', 'get_all_velocities',
                        'get_modes', 'get_joint_limits', 'set_all_modes', 'set_all_positions'):
@@ -179,6 +180,7 @@ class Tests(unittest.TestCase):
         """Command. Exercise the actual right owner loop with a fake SDK; API queues only."""
         hub = server.Observatory()
         hub.pair.set_state(mode='ready')
+        hub.right_pair.set_state(mode='ready')
         driver = Mock()
         for method in ('get_error_information', 'get_all_positions', 'get_all_velocities',
                        'get_modes', 'get_joint_limits', 'set_all_modes', 'set_all_positions'):
@@ -202,6 +204,7 @@ class Tests(unittest.TestCase):
         """Command. Exercise the actual right owner loop with a fake SDK; API queues only."""
         hub = server.Observatory()
         hub.pair.set_state(mode='ready')
+        hub.right_pair.set_state(mode='ready')
         driver = Mock()
         for method in ('get_error_information', 'get_all_positions', 'get_all_velocities',
                        'get_modes', 'get_joint_limits', 'set_all_modes', 'set_all_positions'):

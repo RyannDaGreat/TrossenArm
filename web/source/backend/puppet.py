@@ -58,13 +58,18 @@ class IntentStopped(Exception):
 class LeftPair:
     """One thread owns both SDK instances; HTTP threads only update ordered intent."""
 
-    def __init__(self, stop, publish, presets=None):
+    def __init__(self, stop, publish, presets=None, side="left"):
         """
         Command. Create disarmed state without hardware access.
 
         Args: stop (Event): server shutdown; publish: callback(role, driver).
         Returns: None; snapshot() initially reports connecting/disarmed.
         """
+        if side not in ("left", "right"):
+            raise ValueError("Unknown pair side")
+        self.side = side
+        self.leader, self.follower = f"leader_{side}", f"follower_{side}"
+        self.stop_order = (self.follower, self.leader)
         self.stop, self.publish = stop, publish
         self.presets = presets
         self.lock = presets.lock if presets else threading.RLock()
@@ -89,6 +94,10 @@ class LeftPair:
         Returns: None; request('stop', token, 4) latches a stop until the owner confirms idle.
         """
         with self.lock:
+            if action == "arm" and self.presets:
+                for pair in self.presets.pairs.values():
+                    if pair is not self and (pair.enabled or pair.stop_pending or pair.state["active"] is not False):
+                        raise ValueError("Stop the other puppet pair first")
             if action == "arm" and self.presets and self.presets.busy():
                 raise ValueError("Stop the preset before enabling puppet mode")
             if self.state["mode"] in ("connecting", "fault", "stop_unconfirmed", "stopped"):
@@ -180,7 +189,7 @@ class LeftPair:
             self.generation += 1
         self.set_state(mode="stopping", active=None, stop_confirmed=False)
         failures = []
-        for role in STOP_ORDER:
+        for role in self.stop_order:
             if role not in self.drivers or role in self.dead:
                 failures.append(f"{role}: stop cannot be confirmed on failed/unavailable driver")
                 continue
@@ -210,34 +219,34 @@ class LeftPair:
         Args: generation: engagement token; tick_started: current monotonic control start.
         Returns: (leader_reference, follower_reference, bounds); no automatic alignment sweep.
         """
-        for role in STOP_ORDER:
+        for role in self.stop_order:
             if list(self.sdk(role, "get_modes")) != [arm.Mode.idle]*7:
                 raise RuntimeError("Expected seven idle modes before engagement")
             speeds = list(self.sdk(role, "get_all_velocities"))
             if len(speeds) != 7 or any(not math.isfinite(v) or abs(v) > 0.05 for v in speeds):
                 raise StartNotReady("Puppet start cancelled because an arm was moving. Up is available; try puppet mode once both arms have stopped.")
-        leader_ref = list(self.sdk("leader_left", "get_all_positions"))
-        raw = list(self.sdk("follower_left", "get_all_positions"))
+        leader_ref = list(self.sdk(self.leader, "get_all_positions"))
+        raw = list(self.sdk(self.follower, "get_all_positions"))
         if len(leader_ref) != 7 or len(raw) != 7 or not all(math.isfinite(q) for q in leader_ref+raw):
             raise RuntimeError("Invalid initial feedback")
-        limits = self.sdk("follower_left", "get_joint_limits")
+        limits = self.sdk(self.follower, "get_joint_limits")
         bounds = [(limit.position_min, limit.position_max) for limit in limits]
         if len(bounds) != 7 or not all(math.isfinite(lo) and math.isfinite(hi) and lo < hi for lo, hi in bounds):
             raise RuntimeError("Invalid follower limits")
         reference = [max(lo, min(q, hi)) for q, (lo, hi) in zip(raw, bounds)]
         if max(abs(a-b) for a, b in zip(raw, reference)) > INITIAL_BOUND_OFFSET_RAD:
             raise RuntimeError("Follower outside bounds; supervised alignment required")
-        for q, limit in zip(leader_ref, self.sdk("leader_left", "get_joint_limits")):
+        for q, limit in zip(leader_ref, self.sdk(self.leader, "get_joint_limits")):
             if not limit.position_min-limit.position_tolerance <= q <= limit.position_max+limit.position_tolerance:
                 raise RuntimeError("Leader outside factory tolerance")
-        for role, values in (("leader_left", leader_ref), ("follower_left", raw)):
+        for role, values in ((self.leader, leader_ref), (self.follower, raw)):
             own_limits = self.sdk(role, "get_joint_limits")
             own_bounds = [(v.position_min, v.position_max) for v in own_limits]
             upright = tall_target(values[:6], own_bounds[:6])
             if any(abs(a-b) > UPRIGHT_TOLERANCE_RAD for a,b in zip(values[1:6], upright[1:6])) or abs(values[6]-own_bounds[6][1]) > 0.002:
-                raise StartNotReady("Use Up on both left arms first: upright, wrists reset, grippers open")
+                raise StartNotReady(f"Use Up on both {self.side} arms first: upright, wrists reset, grippers open")
         if any(abs(a-b) > ALIGNMENT_TOLERANCE_RAD for a,b in zip(leader_ref[:6], raw[:6])):
-            raise StartNotReady("Align the left base headings before enabling puppet mode")
+            raise StartNotReady(f"Align the {self.side} base headings before enabling puppet mode")
         self.speeds = [min(SPEED_RAD_S if i < 6 else GRIPPER_SPEED_M_S, limit.velocity_max) for i,limit in enumerate(limits)]
         self.feedback_bounds = [(v.position_min-v.position_tolerance, v.position_max+v.position_tolerance) for v in limits]
         self.velocity_bounds = [v.velocity_max+v.velocity_tolerance for v in limits]
@@ -245,10 +254,10 @@ class LeftPair:
             raise RuntimeError("Invalid follower velocity limits")
         self.set_state(mode="arming", active=None, stop_confirmed=False)
         for role, method, args in (
-            ("follower_left", "set_all_modes", (arm.Mode.position,)),
-            ("follower_left", "set_all_positions", (reference, 0.0, False)),
-            ("leader_left", "set_all_modes", (arm.Mode.external_effort,)),
-            ("leader_left", "set_all_external_efforts", ([0.0]*7, 0.0, False)),
+            (self.follower, "set_all_modes", (arm.Mode.position,)),
+            (self.follower, "set_all_positions", (reference, 0.0, False)),
+            (self.leader, "set_all_modes", (arm.Mode.external_effort,)),
+            (self.leader, "set_all_external_efforts", ([0.0]*7, 0.0, False)),
         ):
             self.require_intent(generation, tick_started)
             self.sdk(role, method, *args)
@@ -262,18 +271,18 @@ class LeftPair:
         """
         active = False
         try:
-            for role, ip, preset in (("leader_left", "192.168.1.3", arm.StandardEndEffector.wxai_v0_leader),
-                                     ("follower_left", "192.168.1.5", arm.StandardEndEffector.wxai_v0_follower)):
+            for role, ip, preset in ((self.leader, "192.168.1.3" if self.side == "left" else "192.168.1.2", arm.StandardEndEffector.wxai_v0_leader),
+                                     (self.follower, "192.168.1.5" if self.side == "left" else "192.168.1.4", arm.StandardEndEffector.wxai_v0_follower)):
                 self.drivers[role] = arm.TrossenArmDriver()
                 self.sdk(role, "configure", arm.Model.wxai_v0, preset, ip, False, 5.0)
             self.set_state(mode="ready")
             if self.presets:
-                for role in STOP_ORDER:
+                for role in self.stop_order:
                     self.presets.connected(role)
             last_tick, last_publish = time.monotonic(), 0.0
             while not self.stop.is_set():
                 if self.presets:
-                    for role in STOP_ORDER:
+                    for role in self.stop_order:
                         self.presets.tick(role, partial(self.sdk, role))
                 now = time.monotonic()
                 dt, last_tick = now-last_tick, now
@@ -285,7 +294,7 @@ class LeftPair:
                         if not self.halt():
                             raise RuntimeError("Stopping failed; use the physical stop")
                         active = False
-                    for role in STOP_ORDER:
+                    for role in self.stop_order:
                         error = self.sdk(role, "get_error_information")
                         if error != "No error":
                             self.dead.add(role)
@@ -297,16 +306,16 @@ class LeftPair:
                         engaged, active = time.monotonic(), True
                         last_tick = engaged
                         self.set_state(mode="active", active=True, remaining_s=SESSION_SECONDS, limited=[])
-                        LOG.warning("Left puppet active: absolute seven-joint copying engaged from upright")
+                        LOG.warning("%s puppet active: absolute seven-joint copying engaged from upright", self.side)
                     elif active:
                         if not 0 < dt <= MAX_STEP_TIME:
                             raise RuntimeError(f"Missed control interval: {dt:.3f}s")
-                        expected = {"leader_left": arm.Mode.external_effort, "follower_left": arm.Mode.position}
+                        expected = {self.leader: arm.Mode.external_effort, self.follower: arm.Mode.position}
                         for role, mode in expected.items():
                             if list(self.sdk(role, "get_modes")) != [mode]*7:
                                 raise RuntimeError(f"Unexpected {role} modes")
-                        feedback = list(self.sdk("follower_left", "get_all_positions"))
-                        velocity = list(self.sdk("follower_left", "get_all_velocities"))
+                        feedback = list(self.sdk(self.follower, "get_all_positions"))
+                        velocity = list(self.sdk(self.follower, "get_all_velocities"))
                         if len(feedback) != 7 or len(velocity) != 7 or not all(math.isfinite(q) for q in feedback+velocity):
                             raise RuntimeError("Invalid follower feedback")
                         if not all(lo <= q <= hi for q,(lo,hi) in zip(feedback,self.feedback_bounds)):
@@ -314,15 +323,15 @@ class LeftPair:
                         if any(abs(v) > bound for v,bound in zip(velocity,self.velocity_bounds)):
                             raise RuntimeError("Follower exceeded factory velocity tolerance")
                         # Anchor each command to feedback so lag cannot accumulate a large queued move.
-                        target, limited = limited_target(feedback, list(self.sdk("leader_left", "get_all_positions")),
+                        target, limited = limited_target(feedback, list(self.sdk(self.leader, "get_all_positions")),
                                                          bounds, self.speeds, dt)
                         self.set_state(limited=limited)
                         self.require_intent(generation, now, engaged)
-                        self.sdk("follower_left", "set_all_positions", target, TARGET_HORIZON_SECONDS, False)
+                        self.sdk(self.follower, "set_all_positions", target, TARGET_HORIZON_SECONDS, False)
                         command = target
                         self.set_state(remaining_s=None if self.unlimited else max(0, SESSION_SECONDS-(time.monotonic()-engaged)))
                     if now-last_publish >= 1/20:
-                        for role in STOP_ORDER:
+                        for role in self.stop_order:
                             try:
                                 self.publish(role, self.drivers[role])
                             except Exception:
@@ -345,14 +354,14 @@ class LeftPair:
             LOG.exception("Left pair fault; stopping healthy peer first, no automatic resume")
         finally:
             if self.presets:
-                for role in STOP_ORDER:
+                for role in self.stop_order:
                     self.presets.unavailable(role, self.fault or "Owner shutting down")
             confirmed = self.halt()
             if self.presets and confirmed:
                 # halt() already verified both idle; release a queued preset only now.
-                for role in STOP_ORDER:
+                for role in self.stop_order:
                     self.presets.confirm_halted(role, self.fault or "Server stopped")
-            for role in STOP_ORDER:
+            for role in self.stop_order:
                 if role not in self.drivers:
                     continue
                 try:

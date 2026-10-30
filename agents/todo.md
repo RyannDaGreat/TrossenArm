@@ -70,3 +70,6 @@
 - [x] Absolute seven-joint following, upright alignment gate, normalized/open Up, offline and live verification.
 - [x] Optional stopwatch unlimited mode and recoverable moving-start rejection; dashboard restarted ready.
 - [x] Send final phone/audio completion.
+
+- [x] Implement right-pair puppeteering, side selector, shared seven-joint/timer behavior; verify mocked owner/API/browser and real connections.
+- [ ] Operator-driven right-pair copying trial (software and connections verified; no automatic following).

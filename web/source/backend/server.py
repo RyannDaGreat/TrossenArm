@@ -254,7 +254,8 @@ class Observatory:
     def close(self):
         """Command. Stop workers and release owned cameras/robot connections."""
         self.stop.set()
-        for thread in self.threads:
+        owners = [pair.owner_thread for pair in (self.pair, self.right_pair) if pair.owner_thread]
+        for thread in dict.fromkeys([*self.threads, *owners]):
             thread.join(timeout=20)
             if thread.is_alive():
                 LOGGER.error("Worker %s did not stop within 20 seconds", thread.name)
@@ -346,7 +347,7 @@ async def camera_stream(websocket: WebSocket, role: str):
 class PuppetRequest(BaseModel):
     """Validated intent; never contains arbitrary joint targets or controller addresses."""
     side: Literal["left", "right"] = "left"
-    action: Literal["arm", "hold", "stop", "disarm", "unlimited"]
+    action: Literal["arm", "hold", "stop", "disarm", "unlimited", "reconnect"]
     client: str = Field(min_length=8, max_length=80)
     sequence: int = Field(ge=1)
 
@@ -364,7 +365,10 @@ async def puppet_control(body: PuppetRequest, request: Request):
         raise HTTPException(403, "Controls require this local dashboard origin")
     try:
         pair = hub.pair if body.side == "left" else hub.right_pair
-        pair.request(body.action, body.client, body.sequence)
+        if body.action == "reconnect":
+            pair.reconnect()
+        else:
+            pair.request(body.action, body.client, body.sequence)
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
     return pair.snapshot()

@@ -89,3 +89,6 @@
 - [ ] Deploy base-aligned Up after backend restart authorization; verify fresh ready state without automatic motion.
 
 - [x] Execute updated Up on all four arms; verify idle/noerror and record operator confirmation that all four face north.
+- [ ] Fix stale stop errors, recoverable timing stops, and explicit per-pair reconnect; test owner exclusivity and no automatic motion.
+
+Session handoff: recovery code is saved and mock-tested; deploy/test next session. Rest controls await clarification of the intended pose. Services stopped at operator request.

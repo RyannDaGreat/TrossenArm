@@ -47,6 +47,10 @@ def limited_target(current, leader, bounds, speeds, dt):
     return result, limited
 
 
+class ControlDeadline(RuntimeError):
+    """A missed software deadline requiring a confirmed stop, not driver retirement."""
+
+
 class StartNotReady(Exception):
     """Recoverable upright/alignment precondition; no activation writes occurred."""
 
@@ -67,6 +71,7 @@ class LeftPair:
         """
         if side not in ("left", "right"):
             raise ValueError("Unknown pair side")
+        self.owner_thread = None
         self.side = side
         self.leader, self.follower = f"leader_{side}", f"follower_{side}"
         self.stop_order = (self.follower, self.leader)
@@ -128,10 +133,24 @@ class LeftPair:
                 raise ValueError("Unknown puppet action")
             self.sequences[client] = sequence
 
+    def reconnect(self):
+        """Command. Replace an exited owner with fresh disarmed connections; never clear faults."""
+        with self.lock:
+            if self.stop.is_set() or self.owner_thread is None or self.owner_thread.is_alive():
+                raise ValueError("Owner still running or stopping; reconnect waits for cleanup")
+            if self.enabled or (self.presets and self.presets.busy(self.side)):
+                raise ValueError("Stop this pair's movements before reconnecting")
+            self.drivers, self.dead, self.fault = {}, set(), None
+            self.client, self.deadline, self.stop_pending = None, 0.0, False
+            self.generation += 1
+            self.set_state(mode="connecting", active=False, error=None, limited=[], stop_confirmed=False)
+            self.owner_thread = threading.Thread(target=self.run, daemon=True)
+            self.owner_thread.start()
+
     def snapshot(self):
         """Query. Return a state copy; active=None explicitly means stop is unconfirmed."""
         with self.lock:
-            return {**self.state, "enabled": self.enabled, "stop_pending": self.stop_pending, "unlimited": self.unlimited}
+            return {**self.state, "enabled": self.enabled, "stop_pending": self.stop_pending, "unlimited": self.unlimited, "can_reconnect": self.owner_thread is not None and not self.owner_thread.is_alive()}
 
     def set_state(self, **values):
         """
@@ -172,7 +191,7 @@ class LeftPair:
                     or (engaged is not None and not self.unlimited and now-engaged >= SESSION_SECONDS)):
                 raise IntentStopped("Operator released, heartbeat expired, or session ended")
         if now-tick_started > MAX_STEP_TIME:
-            raise RuntimeError("Current SDK reads exceeded the control deadline")
+            raise ControlDeadline("Current SDK reads exceeded the control deadline")
 
     def halt(self):
         """
@@ -205,7 +224,7 @@ class LeftPair:
                 self.client = None
         detail = "; ".join(filter(None, [self.fault, *failures])) or None
         self.set_state(mode=("fault" if self.fault else "ready") if confirmed else "stop_unconfirmed",
-                       active=False if confirmed else None, stop_confirmed=confirmed, error=detail, remaining_s=0)
+                       active=False if confirmed else None, stop_confirmed=confirmed, error=detail, remaining_s=0, limited=[])
         return confirmed
 
     def activate(self, generation, tick_started):
@@ -265,13 +284,19 @@ class LeftPair:
 
         Returns: None after follower-first stop/cleanup. Faults never auto-resume.
         """
+        self.owner_thread = threading.current_thread()
         active = False
         try:
             for role, ip, preset in ((self.leader, "192.168.1.3" if self.side == "left" else "192.168.1.2", arm.StandardEndEffector.wxai_v0_leader),
                                      (self.follower, "192.168.1.5" if self.side == "left" else "192.168.1.4", arm.StandardEndEffector.wxai_v0_follower)):
                 self.drivers[role] = arm.TrossenArmDriver()
                 self.sdk(role, "configure", arm.Model.wxai_v0, preset, ip, False, 5.0)
-            self.set_state(mode="ready")
+            for role in self.stop_order:
+                if self.sdk(role, "get_error_information") != "No error":
+                    raise RuntimeError(f"{role}: controller reports an error; reconnect does not clear it")
+                if list(self.sdk(role, "get_modes")) != [arm.Mode.idle]*7:
+                    raise RuntimeError(f"{role}: expected idle on connection")
+            self.set_state(mode="ready", stop_confirmed=True)
             if self.presets:
                 for role in self.stop_order:
                     self.presets.connected(role)
@@ -305,7 +330,7 @@ class LeftPair:
                         LOG.warning("%s puppet active: absolute seven-joint copying engaged from upright", self.side)
                     elif active:
                         if not 0 < dt <= MAX_STEP_TIME:
-                            raise RuntimeError(f"Missed control interval: {dt:.3f}s")
+                            raise ControlDeadline(f"Missed control interval: {dt:.3f}s")
                         expected = {self.leader: arm.Mode.external_effort, self.follower: arm.Mode.position}
                         for role, mode in expected.items():
                             if list(self.sdk(role, "get_modes")) != [mode]*7:
@@ -334,8 +359,9 @@ class LeftPair:
                                 self.dead.add(role)
                                 raise
                         last_publish = now
-                except StartNotReady as reason:
-                    self.halt()
+                except (StartNotReady, ControlDeadline) as reason:
+                    if not self.halt():
+                        raise RuntimeError("Stopping failed; use the physical stop")
                     active = False
                     self.set_state(error=str(reason))
                 except IntentStopped as reason:

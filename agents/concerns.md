@@ -178,3 +178,6 @@ All four updated Up moves completed, then fresh telemetry confirmed idle/noerror
 - A preset and puppet mode cannot own motion concurrently.
 - Joint-coordinate copying does not establish world compass alignment when mount registration differs.
 - Preserve base heading.
+
+## Session shutdown and recovery work
+Operator requested push and shutdown within three minutes. Recovery code now keeps confirmed-idle software deadline stops recoverable, adds explicit reconnect only after owner cleanup, checks fresh idle/error status, and joins recovered owners on shutdown. Mock lifecycle/concurrent-owner/reconnect tests passed; frontend built. Recovery has not been deployed or physically tested. Initial HTTP shutdown stop request returned HTTP409 because old failed owner was unavailable; proceeded with server SIGTERM cleanup and Vite termination. Rest definition remains unresolved: local vendor teleoperation uses all-seven-zero sleep, other demos capture startup positions; do not invent a Rest target. All subagents completed.

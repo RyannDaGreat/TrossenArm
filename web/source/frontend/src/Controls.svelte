@@ -84,6 +84,13 @@
     } catch (failure) { if (channel.generation === token) { session.error = failure.message; release(key); } }
     finally { session.pending = false; }
   }
+  /** Command. Reconnect an exited owner; this never enables following. */
+  async function reconnect(key) {
+    release(key); sessions[key].error = ''; sessions[key].pending = true;
+    try { await send(key, 'reconnect'); }
+    catch (failure) { sessions[key].error = failure.message; }
+    finally { sessions[key].pending = false; }
+  }
   /** Command. Require a fresh acknowledgement when opening controls. */
   function open() { confirmed = false; dialog.showModal(); }
   /** Command. Stop all channels before closing. */
@@ -127,7 +134,7 @@
         </div>
       {/each}
     </div>
-    <p class="notice">Raises one selected arm with its tool pointing vertically up. Base yaw stays as it is; wrist yaw and tool roll reset to zero and the gripper opens. North is not calibrated in these presets.</p>
+    <p class="notice">Raises one selected arm with its tool pointing vertically up. Up sets the verified north base heading, resets wrist yaw and tool roll, and opens the gripper.</p>
   </details>
   <details class="puppet-section" aria-label="Puppet mode" open>
     <summary class="section-title"><h3>Puppet mode</h3><span>Choose left or right <span class="section-chevron" aria-hidden="true">›</span></span></summary>
@@ -145,8 +152,10 @@
             {#if running}<Stopwatch remaining={state?.remaining_s ?? 60} unlimited={!!state?.unlimited} onclick={() => { sessions[choice].unlimited = true; }} />{/if}
             <button class="switch" role="switch" aria-checked={running} aria-label={`Enable ${choice} puppet mode`} disabled={!running && blocked(choice)} onclick={() => running ? stopOne(choice) : start(choice)}><span></span></button>
           </div>
-          {#if state?.limited?.length}<div class="limit-notice" role="status">{#each state.limited as limit}<p>{jointNames[limit.joint]}: requested {(limit.requested*(limit.joint === 6 ? 1000 : 180/Math.PI)).toFixed(1)}{limit.joint === 6 ? ' mm' : '°'}, held at {(limit.bounded*(limit.joint === 6 ? 1000 : 180/Math.PI)).toFixed(1)}{limit.joint === 6 ? ' mm' : '°'} ({limit.kind}).</p>{/each}</div>{/if}
-          {#if sessions[choice].error || state?.error}<p class="error-banner" role="alert">{sessions[choice].error || state?.error}</p>{/if}
+          {#if running && state?.limited?.length}<div class="limit-notice" role="status">{#each state.limited as limit}<p>{jointNames[limit.joint]}: requested {(limit.requested*(limit.joint === 6 ? 1000 : 180/Math.PI)).toFixed(limit.joint === 6 ? 3 : 1)}{limit.joint === 6 ? ' mm' : '°'}, held at {(limit.bounded*(limit.joint === 6 ? 1000 : 180/Math.PI)).toFixed(limit.joint === 6 ? 3 : 1)}{limit.joint === 6 ? ' mm' : '°'} ({limit.kind}).</p>{/each}</div>{/if}
+          {#if sessions[choice].error || state?.error}<p class="error-banner" role="alert">{state?.error || sessions[choice].error}</p>{/if}
+          {#if state?.can_reconnect}<button class="arm-stop" disabled={sessions[choice].pending} onclick={() => reconnect(choice)}>Reconnect {choice} arms</button>{/if}
+          {#if sessions[choice].error && state?.mode === 'ready' && !state?.stop_pending}<button class="arm-stop" onclick={() => { sessions[choice].error = ''; }}>Dismiss message</button>{/if}
         </article>
       {/each}
     </div>

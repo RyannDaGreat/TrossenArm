@@ -1,4 +1,4 @@
-"""Local read-only robot observatory. Camera capture and driver ownership live here."""
+"""Local robot observatory; all motor writes stay on existing SDK-owner threads."""
 import asyncio
 from collections import deque
 from contextlib import asynccontextmanager
@@ -20,6 +20,7 @@ import trossen_arm as arm
 import robot_camera
 from geometry import forward
 from puppet import LeftPair
+from presets import Presets
 
 LOGGER = logging.getLogger("observatory")
 WIDTH, HEIGHT, FPS = 640, 480, 30
@@ -68,7 +69,7 @@ def assign_roles(devices):
 
 
 class Observatory:
-    """Command owner for cameras and read-only arm drivers; never sends motion commands."""
+    """Camera and robot owner; HTTP only queues exclusive operator intent."""
 
     def __init__(self):
         """Command. Create stop state and empty telemetry, without opening hardware."""
@@ -76,7 +77,9 @@ class Observatory:
         self.feeds = {}
         self.arms = {}
         self.threads = []
-        self.pair = LeftPair(self.stop, self.publish)
+        self.presets = Presets(self.stop)
+        self.pair = LeftPair(self.stop, self.publish, self.presets)
+        self.presets.pair = self.pair
 
     def start(self):
         """Command. Discover four cameras and start capture, encoder and arm-query threads."""
@@ -180,30 +183,55 @@ class Observatory:
 
     def telemetry(self, role, ip):
         """
-        Command. Own one SDK connection and publish joint/FK reads without changing modes.
+        Command. Own one SDK connection and publish joint/FK reads and execute queued follower presets.
 
         Args: role (str): arm role; ip (str): controller IP.
         Returns: None; publishes six angles and (9,3) frame origins in local base coordinates.
         """
         driver = arm.TrossenArmDriver()
         configured = False
+        failed = False
+
+        def sdk(method, *args):
+            """Command. Retire a failed SDK instance. Args: method, args: SDK call. Returns: SDK result."""
+            nonlocal failed
+            if failed:
+                raise RuntimeError("Driver failed; restart required")
+            try:
+                return getattr(driver, method)(*args)
+            except Exception:
+                failed = True
+                raise
+
         try:
             preset = getattr(arm.StandardEndEffector, "wxai_v0_leader" if role.startswith("leader") else "wxai_v0_follower")
             driver.configure(arm.Model.wxai_v0, preset, ip, False, 5.0)
             configured = True
+            self.presets.connected(role)
             while not self.stop.is_set():
+                self.presets.tick(role, sdk)
                 self.publish(role, driver)
                 self.stop.wait(1/TELEMETRY_HZ)
         except Exception as error:
+            failed = True
+            self.presets.unavailable(role, error)
             self.arms[role] = {"ip": ip, "ready": False, "error": str(error)}
             LOGGER.exception("Robot telemetry %s stopped", role)
         finally:
             if configured:
                 try:
+                    if not failed:
+                        self.presets.halt(role, sdk, "Server stopped")
+                except Exception as error:
+                    self.presets.unavailable(role, error)
+                    LOGGER.exception("Robot preset stop %s failed", role)
+                try:
                     driver.cleanup()
                 except Exception as error:
                     self.arms[role] = {"ip": ip, "ready": False, "error": f"Cleanup: {error}"}
+                    self.presets.unavailable(role, error)
                     LOGGER.exception("Robot cleanup %s failed", role)
+            self.presets.unavailable(role, "Owner stopped")
 
     def snapshot(self):
         """
@@ -220,7 +248,7 @@ class Observatory:
                 "arms": {role: ({**state, "ready": False, "error": "Telemetry stale"}
                                 if state.get("ready") and now-state["at"] > 0.5 else dict(state))
                          for role, state in self.arms.items()},
-                "puppet": self.pair.snapshot()}
+                "presets": self.presets.snapshot(), "puppet": self.pair.snapshot()}
 
     def close(self):
         """Command. Stop workers and release owned cameras/robot connections."""
@@ -337,6 +365,28 @@ async def puppet_control(body: PuppetRequest, request: Request):
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
     return hub.pair.snapshot()
+
+
+class PresetRequest(BaseModel):
+    """Named presets only; arbitrary joint targets and controller addresses are rejected."""
+    model_config = {"extra": "forbid"}
+    action: Literal["start", "hold", "stop"]
+    role: Literal["follower_left", "follower_right"] | None = None
+    client: str = Field(min_length=8, max_length=80)
+    sequence: int = Field(ge=1)
+
+
+@app.post("/api/presets")
+async def preset_control(body: PresetRequest, request: Request):
+    """Command. Queue same-origin preset intent. Args: body, request: HTTP input. Returns: Preset state."""
+    if (request.client.host not in ("127.0.0.1", "::1") or request.url.hostname != "127.0.0.1"
+            or request.headers.get("origin") != f"http://127.0.0.1:{request.url.port}"):
+        raise HTTPException(403, "Controls require this local dashboard origin")
+    try:
+        hub.presets.request(body.action, body.client, body.sequence, body.role)
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+    return hub.presets.snapshot()
 
 
 app.mount("/", StaticFiles(directory=Path(__file__).parents[1] / "frontend/dist", html=True), name="frontend")

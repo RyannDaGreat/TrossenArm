@@ -23,7 +23,7 @@ h3 { font-size: var(--body); font-weight: 500; text-transform: uppercase; }
 .masthead { display: flex; justify-content: space-between; align-items: end; flex-wrap: wrap; gap: var(--space-lg); padding-bottom: var(--space-lg); border-bottom: var(--rule) solid var(--ink); margin-bottom: var(--space-xl); }
 .eyebrow { font-size: var(--small); letter-spacing: var(--tracking); margin-bottom: var(--space-sm); }
 .connection { display: flex; flex-direction: column; gap: var(--space-xs); font-size: var(--small); }
-.connection strong { color: var(--green); letter-spacing: var(--tracking); }
+.connection > strong { color: var(--green); letter-spacing: var(--tracking); }
 main { display: flex; flex-wrap: wrap; gap: var(--space-xl); align-items: start; }
 .camera-panel { flex: 3 1 var(--camera-min); min-width: 0; }
 .geometry-panel { flex: 2 1 var(--geometry-min); min-width: 0; }
@@ -74,3 +74,19 @@ button:focus-visible { outline: var(--rule) solid var(--red); outline-offset: va
 .limit-details summary { cursor: pointer; padding-bottom: var(--space-sm); }
 .limit-row { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: var(--space-sm); padding: var(--space-xs) 0; border-bottom: var(--border) solid var(--line); }
 
+:root { --modal-width: 720px; --preset-image-height: 150px; --preset-stroke: 4px; --preset-guide-stroke: 1px; --preset-dash: 4px; }
+.control-modal > .control-state { margin-top: var(--space-lg); }
+.preset-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
+.preset-card { display: flex; flex-direction: column; text-align: left; padding: var(--space-lg); border: var(--border) solid var(--ink); background: var(--panel); color: var(--ink); }
+.preset-card:not(:disabled):hover { border-color: var(--red); color: var(--red); }
+.preset-index { font-size: var(--small); letter-spacing: var(--tracking); }
+.preset-card svg { width: var(--full); height: var(--preset-image-height); }
+.preset-arm { fill: none; stroke: currentColor; stroke-width: var(--preset-stroke); }
+.preset-guide { fill: none; stroke: var(--line); stroke-width: var(--preset-guide-stroke); stroke-dasharray: var(--preset-dash); }
+.preset-card circle { fill: var(--panel); stroke: currentColor; stroke-width: var(--preset-guide-stroke); }
+.preset-card strong { display: flex; justify-content: space-between; font-size: var(--section); font-weight: 500; }
+.preset-card small { font-size: var(--small); color: var(--muted); margin-top: var(--space-sm); }
+.control-modal .error-banner { margin-top: var(--space-md); font-size: var(--body); }
+
+:root { --stop-layer: 2; }
+.control-modal > .stop-control { position: sticky; top: 0; z-index: var(--stop-layer); }

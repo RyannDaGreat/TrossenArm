@@ -62,7 +62,7 @@ class IntentStopped(Exception):
 class LeftPair:
     """One thread owns both SDK instances; HTTP threads only update ordered intent."""
 
-    def __init__(self, stop, publish):
+    def __init__(self, stop, publish, presets=None):
         """
         Command. Create disarmed state without hardware access.
 
@@ -70,7 +70,8 @@ class LeftPair:
         Returns: None; snapshot() initially reports connecting/disarmed.
         """
         self.stop, self.publish = stop, publish
-        self.lock = threading.Lock()
+        self.presets = presets
+        self.lock = presets.lock if presets else threading.RLock()
         self.enabled = False
         self.deadline = 0.0
         self.client = None
@@ -91,6 +92,8 @@ class LeftPair:
         Returns: None; request('stop', token, 4) latches a stop until the owner confirms idle.
         """
         with self.lock:
+            if action == "arm" and self.presets and self.presets.busy():
+                raise ValueError("Stop the preset before enabling puppet mode")
             if self.state["mode"] in ("connecting", "fault", "stop_unconfirmed", "stopped"):
                 raise ValueError(self.state["error"] or "Pair not ready")
             if self.stop_pending:
@@ -235,6 +238,10 @@ class LeftPair:
             self.sdk(role, method, *args)
         return leader_ref, reference, bounds
 
+    def preset_sdk(self, method, *args):
+        """Command. Route preset calls through this owner's failure guard. Args: method, args: SDK call. Returns: SDK result."""
+        return self.sdk("follower_left", method, *args)
+
     def run(self):
         """
         Command. Own the left pair until shutdown/fault; powered following requires held intent.
@@ -248,8 +255,12 @@ class LeftPair:
                 self.drivers[role] = arm.TrossenArmDriver()
                 self.sdk(role, "configure", arm.Model.wxai_v0, preset, ip, False, 5.0)
             self.set_state(mode="ready")
+            if self.presets:
+                self.presets.connected("follower_left")
             last_tick, last_publish = time.monotonic(), 0.0
             while not self.stop.is_set():
+                if self.presets:
+                    self.presets.tick("follower_left", self.preset_sdk)
                 now = time.monotonic()
                 dt, last_tick = now-last_tick, now
                 with self.lock:
@@ -317,7 +328,12 @@ class LeftPair:
             self.set_state(mode="stopping", active=None, error=self.fault, stop_confirmed=False)
             LOG.exception("Left pair fault; stopping healthy peer first, no automatic resume")
         finally:
-            self.halt()
+            if self.presets:
+                self.presets.unavailable("follower_left", self.fault or "Owner shutting down")
+            confirmed = self.halt()
+            if self.presets and confirmed:
+                # halt() already verified both idle; release a queued preset only now.
+                self.presets.confirm_halted("follower_left", self.fault or "Server stopped")
             for role in STOP_ORDER:
                 if role not in self.drivers:
                     continue

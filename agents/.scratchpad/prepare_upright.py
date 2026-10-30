@@ -16,7 +16,7 @@ ip = {"follower_right": "192.168.1.4", "follower_left": "192.168.1.5",
       "leader_right": "192.168.1.2", "leader_left": "192.168.1.3"}[role]
 preset = "wxai_v0_leader" if role.startswith("leader") else "wxai_v0_follower"
 pose = os.environ.get("TROSSEN_MOTION_POSE", "upright")
-if pose not in {"upright", "tall", "north"}:
+if pose not in {"upright", "tall", "north", "copy"}:
     raise ValueError(f"Unknown pose: {pose}")
 folder = Path("agents/.scratchpad") / (f"{role}-{pose}-motion" if pose != "upright" else f"{role}-motion")
 folder.mkdir(exist_ok=True)
@@ -46,6 +46,10 @@ try:
     if pose == "north":
         north_degrees = {"follower_left": 91.2, "follower_right": -87.6}
         target = [math.radians(north_degrees[role]), *start[1:5], 0.0]
+    if pose == "copy":
+        assert role.startswith("leader")
+        snapshot = json.loads(Path("agents/.scratchpad/leader-copy-status.json").read_text())
+        target = snapshot["arms"][role.replace("leader", "follower")]["joints"]
     bounds = [(limit.position_min, limit.position_max) for limit in limits]
     print("Factory joint bounds:", bounds, flush=True)
     print("Factory position tolerances:", [limit.position_tolerance for limit in limits], flush=True)

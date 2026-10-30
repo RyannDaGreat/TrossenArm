@@ -18,7 +18,7 @@ ROLE = os.environ.get("TROSSEN_MOTION_ROLE")
 if ROLE is not None and ROLE not in {"leader_left", "leader_right", "follower_right", "follower_left"}:
     raise ValueError(f"Unsupported motion role: {ROLE}")
 POSE = os.environ.get("TROSSEN_MOTION_POSE", "upright")
-if POSE not in {"upright", "tall", "north"}:
+if POSE not in {"upright", "tall", "north", "copy"}:
     raise ValueError(f"Unknown pose: {POSE}")
 SCRATCH = Path("agents/.scratchpad") / (f"{ROLE}-{POSE}-motion" if POSE != "upright" else f"{ROLE}-motion" if ROLE else "")
 APPROVAL = SCRATCH / "upright-approval.txt"

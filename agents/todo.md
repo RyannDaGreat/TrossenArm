@@ -60,9 +60,9 @@
 - [x] User explicitly confirmed leader movement paths clear and instructed motion; existing cameras do not show leaders.
 - [x] Verify actual leader feedback tolerances, copy each follower pose with single control owner, and verify final idle/no error.
 - [x] Save four operator reference photographs and standing leader-clearance assumption in the manifest.
-- [ ] Restore dashboard and report completion.
+- [x] Restore dashboard and report completion.
 - [x] Restore/open dashboard after leader copies; verify four live cameras and four idle arms.
 
 ## Four-arm preset controls
-- [ ] Add leader-up controls using existing SDK owners.
-- [ ] Put all position presets in a collapsed accordion; verify browser and owner routing offline.
+- [x] Add leader-up controls using existing SDK owners.
+- [x] Put all position presets in a collapsed accordion; verify browser and owner routing offline.

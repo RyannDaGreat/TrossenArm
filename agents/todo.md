@@ -33,7 +33,7 @@
 - [x] Replace unexplained range faults with per-joint clamping and exact boundary diagnostics; retain factory limits.
 - [x] Observe real user-driven follower movement, then a measured-velocity guard stop. Both left arms ended idle.
 - [ ] Live-test the final 60 ms interpolated-target change and numeric speed diagnostics. This adjustment is NOT yet physically verified; do not widen the guard just to force completion.
-- [ ] Complete a reliable supervised puppeteering trial and report actual outcome. Grippers remain unlinked in the current arm-only implementation.
+- [x] Complete real user-driven seven-joint copying; see absolute-observation.json and current manifest results.
 
 ## Delivered
 
@@ -66,3 +66,7 @@
 ## Four-arm preset controls
 - [x] Add leader-up controls using existing SDK owners.
 - [x] Put all position presets in a collapsed accordion; verify browser and owner routing offline.
+
+- [x] Absolute seven-joint following, upright alignment gate, normalized/open Up, offline and live verification.
+- [x] Optional stopwatch unlimited mode and recoverable moving-start rejection; dashboard restarted ready.
+- [x] Send final phone/audio completion.

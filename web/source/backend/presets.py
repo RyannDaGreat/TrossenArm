@@ -18,14 +18,14 @@ ROLES = ("follower_left", "follower_right", "leader_left", "leader_right")
 
 def tall_target(current, bounds):
     """
-    Pure function. Derive the tall WXAI pose, keeping base yaw and tool roll.
+    Pure function. Derive the tall WXAI pose, keeping base yaw and normalizing both wrist axes.
 
     Args: current: six radians; bounds: six (minimum, maximum) radian pairs.
     Returns: Six finite angles within unchanged nominal controller bounds.
     Examples:
         >>> q = tall_target([0.2, 0, 0, 0, 0, 0.3], [(-3.14, 3.14)]*2 + [(-2.35, 2.356194496)] + [(-3.14, 3.14)]*3)
         >>> [round(v, 3) for v in q]
-        [0.2, 1.305, 2.356, 0.519, 0.0, 0.3]
+        [0.2, 1.305, 2.356, 0.519, 0.0, 0.0]
     """
     if len(current) != 6 or len(bounds) != 6 or not all(math.isfinite(v) for v in current):
         raise ValueError("Expected six finite angles and six joint bounds")
@@ -35,7 +35,7 @@ def tall_target(current, bounds):
     upper, forearm = 0.264, math.hypot(0.245, 0.06)  # Official WXAI DH link lengths, meters.
     angle = elbow + math.atan2(0.06, 0.245)
     shoulder = math.atan2(upper - forearm*math.cos(angle), forearm*math.sin(angle))
-    target = [current[0], shoulder, elbow, shoulder+math.pi/2-elbow, 0.0, current[5]]
+    target = [current[0], shoulder, elbow, shoulder+math.pi/2-elbow, 0.0, 0.0]
     if not all(lo <= value <= hi for value, (lo, hi) in zip(target, bounds)):
         raise ValueError("Tall pose does not fit the current factory limits")
     return target
@@ -61,7 +61,7 @@ class Presets:
         self.started = None
         self.target = None
         self.state = dict(mode="ready", role=None, active=False, stop_confirmed=True,
-                          error=None, remaining_s=0, heading="Keep current base yaw and tool roll")
+                          error=None, remaining_s=0, heading="Keep base yaw; reset wrists and open gripper")
 
     def snapshot(self):
         """Query. Return visible state and connected arm roles."""
@@ -139,8 +139,8 @@ class Presets:
             if self.state["role"] != role:
                 return
             self.state.update(mode="stopping", active=None, stop_confirmed=False)
-        sdk("set_arm_modes", arm.Mode.idle)
-        if list(sdk("get_modes"))[:6] != [arm.Mode.idle]*6:
+        sdk("set_all_modes", arm.Mode.idle)
+        if list(sdk("get_modes")) != [arm.Mode.idle]*7:
             raise RuntimeError("Preset idle readback not confirmed")
         self.confirm_halted(role, error)
 
@@ -169,46 +169,47 @@ class Presets:
             self.require_intent(generation, now)
             if sdk("get_error_information") != "No error":
                 raise ValueError("Controller reports an error; no automatic reset")
-            positions = list(sdk("get_arm_positions"))
-            velocity = list(sdk("get_arm_velocities"))
-            if len(positions) != 6 or len(velocity) != 6 or not all(math.isfinite(v) for v in positions+velocity):
+            positions = list(sdk("get_all_positions"))
+            velocity = list(sdk("get_all_velocities"))
+            if len(positions) != 7 or len(velocity) != 7 or not all(math.isfinite(v) for v in positions+velocity):
                 raise ValueError("Invalid preset feedback")
             modes = list(sdk("get_modes"))
             self.require_intent(generation, now)
             if self.started is None:
                 if modes != [arm.Mode.idle]*7 or max(map(abs, velocity)) > STATIONARY_SPEED_RAD_S:
                     raise ValueError("Preset needs seven idle modes and a stationary arm")
-                limits = sdk("get_joint_limits")[:6]
+                limits = sdk("get_joint_limits")
                 bounds = [(limit.position_min, limit.position_max) for limit in limits]
                 self.feedback_bounds = [(limit.position_min-limit.position_tolerance,
                                          limit.position_max+limit.position_tolerance) for limit in limits]
                 reference = [max(lo, min(q, hi)) for q, (lo, hi) in zip(positions, bounds)]
-                if len(reference) != 6 or max(abs(a-b) for a, b in zip(reference, positions)) > INITIAL_OFFSET_RAD:
+                if len(reference) != 7 or max(abs(a-b) for a, b in zip(reference, positions)) > INITIAL_OFFSET_RAD:
                     raise ValueError("Arm outside nominal bounds; supervised alignment required")
-                self.target = tall_target(reference, bounds)
+                self.target = tall_target(reference[:6], bounds[:6]) + [bounds[6][1]]
+                self.velocity_bounds = [limit.velocity_max + limit.velocity_tolerance for limit in limits]
                 self.require_intent(generation, now)
-                sdk("set_arm_modes", arm.Mode.position)
+                sdk("set_all_modes", arm.Mode.position)
                 self.require_intent(generation, now)
-                sdk("set_arm_positions", reference, 0.0, False)
+                sdk("set_all_positions", reference, 0.0, False)
                 self.require_intent(generation, now)
-                sdk("set_arm_positions", self.target, DURATION_SECONDS, False)
+                sdk("set_all_positions", self.target, DURATION_SECONDS, False)
                 self.started = time.monotonic()
                 with self.lock:
                     # A stop received during the SDK write remains latched by deadline/generation.
                     if self.generation == generation:
                         self.state.update(mode="moving", active=True)
             else:
-                if modes != [arm.Mode.position]*6+[arm.Mode.idle]:
+                if modes != [arm.Mode.position]*7:
                     raise ValueError("Unexpected preset joint modes")
                 if not all(lo <= q <= hi for q, (lo, hi) in zip(positions, self.feedback_bounds)):
                     raise ValueError("Preset feedback exceeded factory tolerance")
-                if max(map(abs, velocity)) > SPEED_LIMIT_RAD_S:
+                if max(map(abs, velocity[:6])) > SPEED_LIMIT_RAD_S or abs(velocity[6]) > self.velocity_bounds[6]:
                     raise ValueError("Preset speed guard exceeded one radian per second")
                 elapsed = time.monotonic()-self.started
                 with self.lock:
                     self.state["remaining_s"] = max(0, DURATION_SECONDS-elapsed)
                 if elapsed >= DURATION_SECONDS:
-                    reached = max(abs(a-b) for a, b in zip(positions, self.target)) <= POSITION_ERROR_RAD
+                    reached = all(abs(a-b) <= tolerance for a, b, tolerance in zip(positions, self.target, [POSITION_ERROR_RAD]*6+[0.002]))
                     if reached or elapsed >= DURATION_SECONDS+SETTLE_SECONDS:
                         self.halt(role, sdk, None if reached else "Preset did not reach its target")
         except Released as reason:

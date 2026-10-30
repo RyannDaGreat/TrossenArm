@@ -344,7 +344,7 @@ async def camera_stream(websocket: WebSocket, role: str):
 
 class PuppetRequest(BaseModel):
     """Validated intent; never contains arbitrary joint targets or controller addresses."""
-    action: Literal["arm", "hold", "stop", "disarm"]
+    action: Literal["arm", "hold", "stop", "disarm", "unlimited"]
     client: str = Field(min_length=8, max_length=80)
     sequence: int = Field(ge=1)
 

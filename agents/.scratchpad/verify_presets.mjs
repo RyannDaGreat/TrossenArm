@@ -41,6 +41,7 @@ try {
           if (body.action === 'stop') Object.assign(fake.presets, {role:null, mode:'ready', active:false, stop_confirmed:true});
         } else {
           if (body.action === 'arm') Object.assign(fake.puppet, {enabled:true, active:true, mode:'active', remaining_s:60});
+          if (body.action === 'unlimited') Object.assign(fake.puppet, {unlimited:true, remaining_s:null});
           if (body.action === 'stop') Object.assign(fake.puppet, {enabled:false, active:false, mode:'ready'});
         }
         await request.respond({status:200,contentType:'application/json',body:JSON.stringify(fake[kind])});
@@ -81,6 +82,11 @@ try {
   await page.click(puppet);
   await page.waitForFunction(() => window.__observatory.status.puppet.enabled);
   assert(await page.$eval(left,e=>e.disabled));
+  await page.click('[aria-label="Turn off puppet time limit"]');
+  await page.waitForFunction(() => window.__observatory.status.puppet.unlimited);
+  await page.waitForSelector('[aria-label="Puppet timer off — no time limit"]');
+  await page.screenshot({path:'agents/.scratchpad/stopwatch-ui.png'});
+  assert(actions.some(x => x.action === 'unlimited'));
   await page.click('[aria-label="Close robot controls"]');
   await page.waitForFunction(() => !window.__observatory.status.puppet.enabled);
   await page.setViewport({width:390,height:844});

@@ -1,5 +1,7 @@
 <script>
   import { onMount } from 'svelte';
+  import Stopwatch from './widgets/Stopwatch/Stopwatch.svelte';
+  let unlimitedRequested = $state(false);
   let { state: pairState, presets, arms } = $props();
   let dialog;
   let confirmed = $state(false);
@@ -9,7 +11,7 @@
   let timer, sequence = 0, sending = false, generation = 0;
   const client = crypto.randomUUID();
   const heartbeatMs = 100, requestTimeoutMs = 1500;
-  const jointNames = ['Base yaw', 'Shoulder', 'Elbow', 'Wrist pitch', 'Wrist yaw', 'Tool roll'];
+  const jointNames = ['Base yaw', 'Shoulder', 'Elbow', 'Wrist pitch', 'Wrist yaw', 'Tool roll', 'Gripper'];
   const choices = [{ role: 'follower_left', title: 'Left follower up', number: '01' }, { role: 'follower_right', title: 'Right follower up', number: '02' }, { role: 'leader_left', title: 'Left leader up', number: '03' }, { role: 'leader_right', title: 'Right leader up', number: '04' }];
   let occupied = $derived(!!control || pending || !!pairState?.enabled || !!presets?.role);
   let visibleState = $derived(presets?.role ? presets : pairState);
@@ -42,7 +44,10 @@
     if (!control || sending) return;
     sending = true;
     const kind = control;
-    try { await send(kind, 'hold'); } catch (failure) {
+    try {
+      await send(kind, kind === 'puppet' && unlimitedRequested ? 'unlimited' : 'hold');
+      unlimitedRequested = false;
+    } catch (failure) {
       // Finishing a preset releases ownership before the next browser poll.
       if (kind === 'presets' && String(failure).includes('No running preset')) { control = null; clearInterval(timer); }
       else fail(failure);
@@ -52,7 +57,7 @@
   /** Command. Start one selected mode; cancellation cannot revive a delayed response. @param {string} kind Control API. @param {string} [role] Arm. @returns {Promise<void>} */
   async function start(kind, role) {
     if (occupied || !confirmed) return;
-    pending = true; error = ''; control = kind;
+    pending = true; error = ''; control = kind; unlimitedRequested = false;
     const token = ++generation;
     try {
       await send(kind, kind === 'presets' ? 'start' : 'arm', role);
@@ -87,7 +92,7 @@
 <button class="control-launch" onclick={open}>Robot controls <span>↗</span></button>
 <dialog bind:this={dialog} class="control-modal" oncancel={(event) => { event.preventDefault(); close(); }}>
   <header><div><p class="eyebrow">TROSSEN / OPERATOR CONTROL</p><h2>Choose a movement.</h2></div><button class="icon-button" onclick={close} aria-label="Close robot controls">×</button></header>
-  <div class="control-state" class:active={visibleState?.active} role="status"><span>{presets?.role?.replaceAll('_', ' ') || 'Left puppet pair'} / {visibleState?.mode ?? 'connecting'}</span><span>{visibleState?.mode === 'stop_unconfirmed' ? 'USE PHYSICAL STOP' : visibleState?.active ? `${Math.ceil(visibleState.remaining_s ?? 0)} seconds left` : visibleState?.stop_confirmed ? 'Idle confirmed' : 'Awaiting owner'}</span></div>
+  <div class="control-state" class:active={visibleState?.active} role="status"><span>{presets?.role?.replaceAll('_', ' ') || 'Left puppet pair'} / {visibleState?.mode ?? 'connecting'}</span><span>{visibleState?.mode === 'stop_unconfirmed' ? 'USE PHYSICAL STOP' : visibleState?.active ? visibleState.unlimited ? 'No time limit' : `${Math.ceil(visibleState.remaining_s ?? 0)} seconds left` : visibleState?.stop_confirmed ? 'Idle confirmed' : 'Awaiting owner'}</span></div>
   <button class="stop-control" onclick={stop}>STOP MOVEMENT</button>
   <div class="switch-row"><div><strong>Workspace clear</strong><small>I can see the arm path and reach the physical power stop.</small></div>
     <button class="switch" role="switch" aria-checked={confirmed} aria-label="Confirm operator and workspace clearance" onclick={() => { confirmed = !confirmed; if (!confirmed) stop(); }}><span></span></button></div>
@@ -102,16 +107,17 @@
         </button>
       {/each}
     </div>
-    <p class="notice">Raises one selected arm with its tool pointing vertically up. Base yaw and tool roll stay as they are. North is not calibrated in these presets.</p>
+    <p class="notice">Raises one selected arm with its tool pointing vertically up. Base yaw stays as it is; wrist yaw and tool roll reset to zero and the gripper opens. North is not calibrated in these presets.</p>
   </details>
   <section class="puppet-section" aria-label="Puppet mode">
-    <div class="switch-row"><div><p class="eyebrow">PUPPET MODE</p><strong>Move the left arm by hand.</strong><small>Leader left .3 → follower left .5. Relative motion, grippers idle.</small></div>
+    <div class="switch-row"><div><p class="eyebrow">PUPPET MODE</p><strong>Move the left arm by hand.</strong><small>Leader left .3 → follower left .5. Absolute angles and gripper opening. Use Up on both left arms first; base headings must match.</small></div>
+      {#if control === 'puppet' || pairState?.enabled}<Stopwatch remaining={pairState?.remaining_s ?? 60} unlimited={!!pairState?.unlimited} onclick={() => { unlimitedRequested = true; }} />{/if}
       <button class="switch" role="switch" aria-checked={control === 'puppet' || !!pairState?.enabled} aria-label="Enable puppet mode" disabled={!confirmed || pending || !!presets?.role || control === 'presets' || !pairState || (!pairState.enabled && pairState.mode !== 'ready')} onclick={() => control === 'puppet' || pairState?.enabled ? stop() : start('puppet')}><span></span></button></div>
   </section>
-  {#if pairState?.limited?.length}<div class="limit-notice" role="status">{#each pairState.limited as limit}<p>{jointNames[limit.joint]}: {degrees(limit.requested)} requested, {degrees(limit.bounded)} held ({limit.kind}).</p>{/each}</div>{/if}
+  {#if pairState?.limited?.length}<div class="limit-notice" role="status">{#each pairState.limited as limit}<p>{jointNames[limit.joint]}: {limit.joint === 6 ? `${(limit.requested*1000).toFixed(1)} mm` : degrees(limit.requested)} requested, {limit.joint === 6 ? `${(limit.bounded*1000).toFixed(1)} mm` : degrees(limit.bounded)} held ({limit.kind}).</p>{/each}</div>{/if}
   {#if error || presets?.error || pairState?.error}<p class="error-banner" role="alert">{error || presets?.error || pairState?.error}</p>{/if}
   <details class="limit-details"><summary>Movement limits and stopping</summary>
-    <p class="notice">Only one mode moves at a time. Closing this panel, leaving the page, losing focus or losing heartbeat stops movement. Puppet mode ends after 60 seconds and is capped at ±14° from engagement and 14°/s. Presets use unchanged controller limits; tiny initial bound corrections up to 0.12° may occur.</p>
+    <p class="notice">Only one mode moves at a time. Closing this panel, leaving the page, losing focus or losing heartbeat stops movement. Click the stopwatch to remove the 60-second session limit. Puppet mode catches up at up to 29°/s and 20 mm/s gripper speed within controller limits. Presets use unchanged controller limits; tiny initial bound corrections up to 0.12° may occur.</p>
     {#each arms?.follower_left?.limits ?? [] as limit, index}<div class="limit-row"><span>{jointNames[index]}</span><span>{degrees(arms.follower_left.joints[index])}</span><span>{degrees(limit.min)} to {degrees(limit.max)}</span></div>{/each}
     <p class="notice">These limits do not detect obstacles. A blocked process or SDK call can delay stopping. Use the physical power stop if idle cannot be confirmed.</p>
   </details>

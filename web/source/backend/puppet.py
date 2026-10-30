@@ -1,4 +1,4 @@
-"""Single-owner, operator-held left-arm following; no gripper copying or automatic homing."""
+"""Single-owner, operator-held left-arm following; absolute seven-joint mapping, upright engagement, no automatic homing."""
 import logging
 import math
 from functools import partial
@@ -6,54 +6,49 @@ import threading
 import time
 
 import trossen_arm as arm
+from presets import tall_target
 
 LOG = logging.getLogger("puppet")
 LOOP_HZ = 50
 HEARTBEAT_SECONDS = 0.5
 SESSION_SECONDS = 60
 MAX_STEP_TIME = 0.1  # Reject five missed periods; never turn a stall into a large catch-up step.
-SPEED_RAD_S = 0.25
-TARGET_HORIZON_SECONDS = 3 / LOOP_HZ  # Interpolate each small update over three ticks, rather than step instantly.
-EXCURSION_RAD = 0.25
-TRACKING_RAD = 0.08
-MEASURED_SPEED_RAD_S = 0.75
+SPEED_RAD_S = 0.5
+GRIPPER_SPEED_M_S = 0.02
+TARGET_HORIZON_SECONDS = 3 / LOOP_HZ
 INITIAL_BOUND_OFFSET_RAD = 0.002
+UPRIGHT_TOLERANCE_RAD = 0.06
+ALIGNMENT_TOLERANCE_RAD = 0.06
 STOP_ORDER = ("follower_left", "leader_left")
 
 
-def limited_target(current, leader, leader_ref, follower_ref, bounds, dt):
-    """
-    Pure function. Relative joint mapping with range, excursion and command-rate caps.
+def limited_target(current, leader, bounds, speeds, dt):
+    """Pure query. Step toward absolute encoder targets with per-joint speed/bound caps.
 
-    Args:
-        current, leader, leader_ref, follower_ref: Equal-length finite radian lists.
-        bounds: Per-joint (minimum, maximum) radian pairs.
-        dt (float): Positive validated interval, at most 0.1 seconds.
-    Returns:
-        tuple[list, list]: Next command and explicit per-joint saturation details.
-    Examples:
-        >>> limited_target([0], [0.1], [0], [0], [(-1, 1)], 0.02)
-        ([0.005], [])
-        >>> limited_target([0], [1], [0], [0], [(-1, 1)], 0.02)[1][0]['kind']
-        'trial excursion'
+    Args: current, leader: radians plus gripper meters; bounds, speeds: matching limits;
+        dt: positive interval up to MAX_STEP_TIME.
+    Returns: next target and controller-bound diagnostics. No engagement-relative offset.
     """
     if not 0 < dt <= MAX_STEP_TIME:
         raise ValueError("Missed control deadline")
-    if not len(current) == len(leader) == len(leader_ref) == len(follower_ref) == len(bounds):
+    if not len(current) == len(leader) == len(bounds) == len(speeds):
         raise ValueError("Joint-vector length mismatch")
-    if not all(math.isfinite(x) for values in (current, leader, leader_ref, follower_ref) for x in values):
+    if not all(math.isfinite(x) for values in (current, leader, speeds) for x in values):
         raise ValueError("Nonfinite joint data")
     result, limited = [], []
-    for joint, (previous, value, origin, reference, (minimum, maximum)) in enumerate(zip(current, leader, leader_ref, follower_ref, bounds)):
-        desired = reference+value-origin
-        lower, upper = max(minimum, reference-EXCURSION_RAD), min(maximum, reference+EXCURSION_RAD)
-        bounded = max(lower, min(desired, upper))
+    for joint, (previous, desired, (lo, hi), speed) in enumerate(zip(current, leader, bounds, speeds)):
+        if not math.isfinite(lo) or not math.isfinite(hi) or lo >= hi or speed <= 0:
+            raise ValueError("Invalid motion limits")
+        bounded = max(lo, min(desired, hi))
         if bounded != desired:
-            limited.append({"joint": joint, "requested": desired, "bounded": bounded,
-                            "kind": "controller bound" if bounded in (minimum, maximum) else "trial excursion"})
-        step = SPEED_RAD_S*dt
-        result.append(previous+max(-step, min(bounded-previous, step)))
+            limited.append(dict(joint=joint, requested=desired, bounded=bounded, kind="controller bound"))
+        step = speed*dt
+        result.append(max(lo, min(hi, previous+max(-step, min(bounded-previous, step)))))
     return result, limited
+
+
+class StartNotReady(Exception):
+    """Recoverable upright/alignment precondition; no activation writes occurred."""
 
 
 class IntentStopped(Exception):
@@ -74,6 +69,7 @@ class LeftPair:
         self.presets = presets
         self.lock = presets.lock if presets else threading.RLock()
         self.enabled = False
+        self.unlimited = False
         self.deadline = 0.0
         self.client = None
         self.sequences = {}
@@ -83,7 +79,7 @@ class LeftPair:
         self.dead = set()
         self.fault = None
         self.state = {"mode": "connecting", "enabled": False, "active": False, "error": None,
-                      "stop_confirmed": False, "grippers": "idle / not linked", "mapping": "relative joint offsets"}
+                      "stop_confirmed": False, "grippers": "absolute opening", "mapping": "absolute joint positions"}
 
     def request(self, action, client, sequence):
         """
@@ -109,7 +105,13 @@ class LeftPair:
                 if self.state["mode"] != "ready" or self.enabled:
                     raise ValueError("Cannot rearm until the previous engagement stops")
                 self.client, self.enabled = client, True
+                self.unlimited = False
                 self.generation += 1
+            elif action == "unlimited":
+                if not self.enabled:
+                    raise ValueError("Enable puppet mode first")
+                self.unlimited = True
+                self.deadline = time.monotonic()+HEARTBEAT_SECONDS
             elif action == "hold":
                 if not self.enabled:
                     raise ValueError("Enable puppet mode first")
@@ -124,7 +126,7 @@ class LeftPair:
     def snapshot(self):
         """Query. Return a state copy; active=None explicitly means stop is unconfirmed."""
         with self.lock:
-            return {**self.state, "enabled": self.enabled, "stop_pending": self.stop_pending}
+            return {**self.state, "enabled": self.enabled, "stop_pending": self.stop_pending, "unlimited": self.unlimited}
 
     def set_state(self, **values):
         """
@@ -162,7 +164,7 @@ class LeftPair:
         with self.lock:
             if (self.stop.is_set() or self.stop_pending or not self.enabled
                     or generation != self.generation or now >= self.deadline
-                    or (engaged is not None and now-engaged >= SESSION_SECONDS)):
+                    or (engaged is not None and not self.unlimited and now-engaged >= SESSION_SECONDS)):
                 raise IntentStopped("Operator released, heartbeat expired, or session ended")
         if now-tick_started > MAX_STEP_TIME:
             raise RuntimeError("Current SDK reads exceeded the control deadline")
@@ -183,8 +185,8 @@ class LeftPair:
                 failures.append(f"{role}: stop cannot be confirmed on failed/unavailable driver")
                 continue
             try:
-                self.sdk(role, "set_arm_modes", arm.Mode.idle)
-                if list(self.sdk(role, "get_modes"))[:6] != [arm.Mode.idle]*6:
+                self.sdk(role, "set_all_modes", arm.Mode.idle)
+                if list(self.sdk(role, "get_modes")) != [arm.Mode.idle]*7:
                     raise RuntimeError("Idle readback not confirmed")
                 self.publish(role, self.drivers[role])
             except Exception as error:
@@ -211,29 +213,42 @@ class LeftPair:
         for role in STOP_ORDER:
             if list(self.sdk(role, "get_modes")) != [arm.Mode.idle]*7:
                 raise RuntimeError("Expected seven idle modes before engagement")
-            speeds = list(self.sdk(role, "get_arm_velocities"))
-            if len(speeds) != 6 or any(not math.isfinite(v) or abs(v) > 0.05 for v in speeds):
-                raise RuntimeError("Hold the leader still before engagement")
-        leader_ref = list(self.sdk("leader_left", "get_arm_positions"))
-        raw = list(self.sdk("follower_left", "get_arm_positions"))
-        if len(leader_ref) != 6 or len(raw) != 6 or not all(math.isfinite(q) for q in leader_ref+raw):
+            speeds = list(self.sdk(role, "get_all_velocities"))
+            if len(speeds) != 7 or any(not math.isfinite(v) or abs(v) > 0.05 for v in speeds):
+                raise StartNotReady("Puppet start cancelled because an arm was moving. Up is available; try puppet mode once both arms have stopped.")
+        leader_ref = list(self.sdk("leader_left", "get_all_positions"))
+        raw = list(self.sdk("follower_left", "get_all_positions"))
+        if len(leader_ref) != 7 or len(raw) != 7 or not all(math.isfinite(q) for q in leader_ref+raw):
             raise RuntimeError("Invalid initial feedback")
-        limits = self.sdk("follower_left", "get_joint_limits")[:6]
+        limits = self.sdk("follower_left", "get_joint_limits")
         bounds = [(limit.position_min, limit.position_max) for limit in limits]
-        if len(bounds) != 6 or not all(math.isfinite(lo) and math.isfinite(hi) and lo < hi for lo, hi in bounds):
+        if len(bounds) != 7 or not all(math.isfinite(lo) and math.isfinite(hi) and lo < hi for lo, hi in bounds):
             raise RuntimeError("Invalid follower limits")
         reference = [max(lo, min(q, hi)) for q, (lo, hi) in zip(raw, bounds)]
         if max(abs(a-b) for a, b in zip(raw, reference)) > INITIAL_BOUND_OFFSET_RAD:
             raise RuntimeError("Follower outside bounds; supervised alignment required")
-        for q, limit in zip(leader_ref, self.sdk("leader_left", "get_joint_limits")[:6]):
+        for q, limit in zip(leader_ref, self.sdk("leader_left", "get_joint_limits")):
             if not limit.position_min-limit.position_tolerance <= q <= limit.position_max+limit.position_tolerance:
                 raise RuntimeError("Leader outside factory tolerance")
+        for role, values in (("leader_left", leader_ref), ("follower_left", raw)):
+            own_limits = self.sdk(role, "get_joint_limits")
+            own_bounds = [(v.position_min, v.position_max) for v in own_limits]
+            upright = tall_target(values[:6], own_bounds[:6])
+            if any(abs(a-b) > UPRIGHT_TOLERANCE_RAD for a,b in zip(values[1:6], upright[1:6])) or abs(values[6]-own_bounds[6][1]) > 0.002:
+                raise StartNotReady("Use Up on both left arms first: upright, wrists reset, grippers open")
+        if any(abs(a-b) > ALIGNMENT_TOLERANCE_RAD for a,b in zip(leader_ref[:6], raw[:6])):
+            raise StartNotReady("Align the left base headings before enabling puppet mode")
+        self.speeds = [min(SPEED_RAD_S if i < 6 else GRIPPER_SPEED_M_S, limit.velocity_max) for i,limit in enumerate(limits)]
+        self.feedback_bounds = [(v.position_min-v.position_tolerance, v.position_max+v.position_tolerance) for v in limits]
+        self.velocity_bounds = [v.velocity_max+v.velocity_tolerance for v in limits]
+        if any(not math.isfinite(v) or v <= 0 for v in self.speeds+self.velocity_bounds):
+            raise RuntimeError("Invalid follower velocity limits")
         self.set_state(mode="arming", active=None, stop_confirmed=False)
         for role, method, args in (
-            ("follower_left", "set_arm_modes", (arm.Mode.position,)),
-            ("follower_left", "set_arm_positions", (reference, 0.0, False)),
-            ("leader_left", "set_arm_modes", (arm.Mode.external_effort,)),
-            ("leader_left", "set_arm_external_efforts", ([0.0]*6, 0.0, False)),
+            ("follower_left", "set_all_modes", (arm.Mode.position,)),
+            ("follower_left", "set_all_positions", (reference, 0.0, False)),
+            ("leader_left", "set_all_modes", (arm.Mode.external_effort,)),
+            ("leader_left", "set_all_external_efforts", ([0.0]*7, 0.0, False)),
         ):
             self.require_intent(generation, tick_started)
             self.sdk(role, method, *args)
@@ -266,7 +281,7 @@ class LeftPair:
                     held = self.enabled and now < self.deadline
                     pending, generation = self.stop_pending, self.generation
                 try:
-                    if pending or (active and (not held or now-engaged >= SESSION_SECONDS)):
+                    if pending or (active and (not held or (not self.unlimited and now-engaged >= SESSION_SECONDS))):
                         if not self.halt():
                             raise RuntimeError("Stopping failed; use the physical stop")
                         active = False
@@ -278,36 +293,34 @@ class LeftPair:
                     if held and not active and not pending:
                         leader_ref, command, bounds = self.activate(generation, now)
                         self.require_intent(generation, now)
-                        follower_ref = list(command)
+                        self.set_state(error=None)
                         engaged, active = time.monotonic(), True
                         last_tick = engaged
                         self.set_state(mode="active", active=True, remaining_s=SESSION_SECONDS, limited=[])
-                        LOG.warning("Left puppet active: relative references latched; grippers idle")
+                        LOG.warning("Left puppet active: absolute seven-joint copying engaged from upright")
                     elif active:
                         if not 0 < dt <= MAX_STEP_TIME:
                             raise RuntimeError(f"Missed control interval: {dt:.3f}s")
                         expected = {"leader_left": arm.Mode.external_effort, "follower_left": arm.Mode.position}
                         for role, mode in expected.items():
-                            if list(self.sdk(role, "get_modes")) != [mode]*6+[arm.Mode.idle]:
+                            if list(self.sdk(role, "get_modes")) != [mode]*7:
                                 raise RuntimeError(f"Unexpected {role} modes")
-                        feedback = list(self.sdk("follower_left", "get_arm_positions"))
-                        velocity = list(self.sdk("follower_left", "get_arm_velocities"))
-                        if len(feedback) != 6 or len(velocity) != 6 or not all(math.isfinite(q) for q in feedback+velocity):
+                        feedback = list(self.sdk("follower_left", "get_all_positions"))
+                        velocity = list(self.sdk("follower_left", "get_all_velocities"))
+                        if len(feedback) != 7 or len(velocity) != 7 or not all(math.isfinite(q) for q in feedback+velocity):
                             raise RuntimeError("Invalid follower feedback")
-                        if max(abs(a-b) for a, b in zip(feedback, command)) > TRACKING_RAD:
-                            raise RuntimeError("Follower tracking error exceeded trial bound")
-                        fastest = max(range(6), key=lambda index: abs(velocity[index]))
-                        if abs(velocity[fastest]) > MEASURED_SPEED_RAD_S:
-                            raise RuntimeError(f"Follower joint {fastest} measured {velocity[fastest]:.3f} rad/s; "
-                                               f"trial speed guard is ±{MEASURED_SPEED_RAD_S:.3f} rad/s. "
-                                               "Both arms are being stopped; this is not an obstacle detector.")
-                        target, limited = limited_target(command, list(self.sdk("leader_left", "get_arm_positions")),
-                                                         leader_ref, follower_ref, bounds, dt)
+                        if not all(lo <= q <= hi for q,(lo,hi) in zip(feedback,self.feedback_bounds)):
+                            raise RuntimeError("Follower exceeded factory position tolerance")
+                        if any(abs(v) > bound for v,bound in zip(velocity,self.velocity_bounds)):
+                            raise RuntimeError("Follower exceeded factory velocity tolerance")
+                        # Anchor each command to feedback so lag cannot accumulate a large queued move.
+                        target, limited = limited_target(feedback, list(self.sdk("leader_left", "get_all_positions")),
+                                                         bounds, self.speeds, dt)
                         self.set_state(limited=limited)
                         self.require_intent(generation, now, engaged)
-                        self.sdk("follower_left", "set_arm_positions", target, TARGET_HORIZON_SECONDS, False)
+                        self.sdk("follower_left", "set_all_positions", target, TARGET_HORIZON_SECONDS, False)
                         command = target
-                        self.set_state(remaining_s=max(0, SESSION_SECONDS-(time.monotonic()-engaged)))
+                        self.set_state(remaining_s=None if self.unlimited else max(0, SESSION_SECONDS-(time.monotonic()-engaged)))
                     if now-last_publish >= 1/20:
                         for role in STOP_ORDER:
                             try:
@@ -316,6 +329,10 @@ class LeftPair:
                                 self.dead.add(role)
                                 raise
                         last_publish = now
+                except StartNotReady as reason:
+                    self.halt()
+                    active = False
+                    self.set_state(error=str(reason))
                 except IntentStopped as reason:
                     LOG.info("Operator stop: %s", reason)
                     if not self.halt():

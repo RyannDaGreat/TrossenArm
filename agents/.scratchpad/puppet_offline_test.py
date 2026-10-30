@@ -11,14 +11,16 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "web/source/backend"))
 import puppet
 
+BOUNDS = [(-3.14,3.14), (0,3.14), (0,2.356194496), (-1.57,1.57), (-1.57,1.57), (-3.14,3.14), (0,0.04)]
+START = puppet.tall_target([0.1]*6, BOUNDS[:6])+[0.04]
 assert doctest.testmod(puppet).failed == 0
-command, limited = puppet.limited_target([0, 0.1], [-0.001, 0.12], [0, 0.1], [0, 0.1], [(0,1), (0,1)], 0.02)
+command, limited = puppet.limited_target([0, 0.1], [-0.001, 0.12], [(0,1), (0,1)], [0.5,0.5], 0.02)
 assert command[0] == 0 and command[1] > 0.1
 assert limited == [{'joint': 0, 'requested': -0.001, 'bounded': 0, 'kind': 'controller bound'}]
 print('PASS: boundary jitter clamps only its joint; other joints still follow with explicit diagnostics.')
 for invalid_dt in (0, -1, 0.11):
     try:
-        puppet.limited_target([0], [0], [0], [0], [(-1,1)], invalid_dt)
+        puppet.limited_target([0], [0], [(-1,1)], [0.5], invalid_dt)
     except ValueError:
         pass  # Expected guard rejection.
     else:
@@ -32,7 +34,7 @@ def set_modes(driver, mode):
     Args: driver: mock; mode: SDK Mode.
     Returns: None; set_modes(mock, position) gives six position modes plus idle.
     """
-    driver.get_modes.return_value = [mode]*6+[puppet.arm.Mode.idle]
+    driver.get_modes.return_value = [mode]*7
 
 
 def set_positions(driver, positions, *unused):
@@ -42,23 +44,23 @@ def set_positions(driver, positions, *unused):
     Args: driver: mock; positions: six angles; unused: timing arguments.
     Returns: None; set_positions(mock, [0]*6) stores six zeros.
     """
-    driver.get_arm_positions.return_value = list(positions)
+    driver.get_all_positions.return_value = list(positions)
 
 
 def fake_driver():
     """
     Command. Create an isolated SDK test double with idle modes and valid limits.
 
-    Returns: Mock; fake_driver().get_arm_positions() returns [0.1]*6.
+    Returns: Mock; fake_driver().get_all_positions() returns [0.1]*6.
     """
     driver = Mock()
-    driver.get_arm_positions.return_value = [0.1]*6
-    driver.get_arm_velocities.return_value = [0.0]*6
+    driver.get_all_positions.return_value = START[:]
+    driver.get_all_velocities.return_value = [0.0]*7
     driver.get_modes.return_value = [puppet.arm.Mode.idle]*7
     driver.get_error_information.return_value = "No error"
-    driver.get_joint_limits.return_value = [SimpleNamespace(position_min=-1, position_max=1, position_tolerance=0.01) for _ in range(7)]
-    driver.set_arm_modes.side_effect = partial(set_modes, driver)
-    driver.set_arm_positions.side_effect = partial(set_positions, driver)
+    driver.get_joint_limits.return_value = [SimpleNamespace(position_min=lo, position_max=hi, position_tolerance=0.01, velocity_max=1.0, velocity_tolerance=0.1) for lo,hi in BOUNDS]
+    driver.set_all_modes.side_effect = partial(set_modes, driver)
+    driver.set_all_positions.side_effect = partial(set_positions, driver)
     return driver
 
 
@@ -86,9 +88,9 @@ with patch.object(puppet.arm, "TrossenArmDriver", side_effect=[leader, follower]
         owner.request("arm", "offline-client", 1)
         owner.request("hold", "offline-client", 2)
         wait_until(lambda: owner.snapshot()["active"])
-        assert follower.set_arm_positions.call_args_list[0].args[0] == [0.1]*6
-        leader.get_arm_positions.return_value = [0.12]+[0.1]*5
-        wait_until(lambda: abs(follower.get_arm_positions()[0]-0.12) < 1e-6)
+        assert follower.set_all_positions.call_args_list[0].args[0] == START
+        leader.get_all_positions.return_value = [0.12]+START[1:]
+        wait_until(lambda: abs(follower.get_all_positions()[0]-0.12) < 1e-6)
         owner.request("stop", "offline-client", 3)
         for action, sequence in (("hold", 2), ("arm", 1)):
             try:
@@ -104,16 +106,16 @@ with patch.object(puppet.arm, "TrossenArmDriver", side_effect=[leader, follower]
         wait_until(lambda: owner.snapshot()["active"])
         wait_until(lambda: owner.snapshot()["stop_confirmed"] and not owner.snapshot()["active"])  # Heartbeat expires.
         assert not owner.snapshot()["enabled"]
-        print("PASS: relative engagement, bounded following, ordered stop, stale-arm rejection, and heartbeat expiry.")
+        print("PASS: absolute engagement, bounded following, ordered stop, stale-arm rejection, and heartbeat expiry.")
     finally:
         stop.set()
         thread.join(timeout=2)
         assert not thread.is_alive()
 for driver in (leader, follower):
     driver.set_gripper_mode.assert_not_called()
-    driver.set_all_positions.assert_not_called()
+    assert driver.get_modes() == [puppet.arm.Mode.idle]*7
     driver.cleanup.assert_called_once()
-print("PASS: both exclusive mock drivers released; no gripper copying or automatic home.")
+print("PASS: both exclusive mock drivers released; seven-joint stop and no automatic home.")
 
 # Stop must remain latched even when stop/arm/hold arrive between worker ticks.
 owner = puppet.LeftPair(threading.Event(), Mock())
@@ -147,14 +149,14 @@ def cancel_during_activation(mode):
         owner.request("stop", "client-A", 6)
 
 
-owner.drivers["follower_left"].set_arm_modes.side_effect = cancel_during_activation
+owner.drivers["follower_left"].set_all_modes.side_effect = cancel_during_activation
 try:
     owner.activate(generation, time.monotonic())
 except puppet.IntentStopped:
     pass  # Expected cancellation, not a hidden hardware failure.
 else:
     raise AssertionError("Activation ignored stop")
-owner.drivers["follower_left"].set_arm_positions.assert_not_called()
+owner.drivers["follower_left"].set_all_positions.assert_not_called()
 assert owner.halt()
 owner.request("arm", "client-A", 7)
 owner.request("hold", "client-A", 8)
@@ -169,10 +171,10 @@ print("PASS: stop/rearm race, competing client, cancellation during activation, 
 
 # A failed leader must not delay a healthy follower's stop behind leader cleanup.
 leader, follower = fake_driver(), fake_driver()
-leader.get_arm_positions.side_effect = RuntimeError("simulated leader read fault")
+leader.get_all_positions.side_effect = RuntimeError("simulated leader read fault")
 owner = puppet.LeftPair(threading.Event(), Mock())
 order = Mock()
-order.attach_mock(follower.set_arm_modes, "follower_idle")
+order.attach_mock(follower.set_all_modes, "follower_idle")
 order.attach_mock(follower.cleanup, "follower_cleanup")
 order.attach_mock(leader.cleanup, "leader_cleanup")
 with patch.object(puppet.arm, "TrossenArmDriver", side_effect=[leader, follower]):
@@ -187,6 +189,6 @@ assert owner.snapshot()["mode"] == "stop_unconfirmed"
 assert owner.snapshot()["active"] is None
 names = [call[0] for call in order.mock_calls]
 assert names.index("follower_idle") < names.index("follower_cleanup") < names.index("leader_cleanup")
-leader.set_arm_modes.assert_not_called()
+leader.set_all_modes.assert_not_called()
 assert "simulated leader read fault" in owner.snapshot()["error"]
 print("PASS: failed driver retired; healthy follower stopped first; uncertainty and original fault retained.")

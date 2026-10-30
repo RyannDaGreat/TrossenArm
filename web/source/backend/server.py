@@ -20,7 +20,7 @@ import trossen_arm as arm
 import robot_camera
 from geometry import forward
 from puppet import LeftPair
-from presets import Presets
+from presets import PresetGroup
 
 LOGGER = logging.getLogger("observatory")
 WIDTH, HEIGHT, FPS = 640, 480, 30
@@ -77,7 +77,7 @@ class Observatory:
         self.feeds = {}
         self.arms = {}
         self.threads = []
-        self.presets = Presets(self.stop)
+        self.presets = PresetGroup(self.stop)
         self.pair = LeftPair(self.stop, self.publish, self.presets)
         self.right_pair = LeftPair(self.stop, self.publish, self.presets, side="right")
         self.presets.pair = self.pair

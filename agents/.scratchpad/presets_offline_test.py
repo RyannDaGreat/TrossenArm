@@ -165,7 +165,7 @@ class Tests(unittest.TestCase):
             """Command. Queue intent on first telemetry, end after target write. Args: role, owned: owner. Returns: None."""
             if not hub.presets.busy():
                 hub.presets.request('start', 'test-browser', 1, role)
-            elif hub.presets.snapshot()['mode'] == 'moving':
+            elif hub.presets.snapshot()['arms'][role]['mode'] == 'moving':
                 hub.stop.set()
         hub.publish = publish
         with patch.object(server.arm, 'TrossenArmDriver', return_value=driver) as factory:
@@ -173,7 +173,7 @@ class Tests(unittest.TestCase):
         factory.assert_called_once()
         self.assertEqual(self.d.modes, [arm.Mode.idle]*7)
         self.assertFalse(hub.presets.busy())
-        self.assertTrue(hub.presets.snapshot()['stop_confirmed'])
+        self.assertTrue(all(s['stop_confirmed'] for s in hub.presets.snapshot()['arms'].values()))
         driver.cleanup.assert_called_once()
 
     def test_leader_right_existing_owner(self):
@@ -189,7 +189,7 @@ class Tests(unittest.TestCase):
             """Command. Queue intent on first telemetry, end after target write. Args: role, owned: owner. Returns: None."""
             if not hub.presets.busy():
                 hub.presets.request('start', 'test-browser', 1, role)
-            elif hub.presets.snapshot()['mode'] == 'moving':
+            elif hub.presets.snapshot()['arms'][role]['mode'] == 'moving':
                 hub.stop.set()
         hub.publish = publish
         with patch.object(server.arm, 'TrossenArmDriver', return_value=driver) as factory:
@@ -197,7 +197,7 @@ class Tests(unittest.TestCase):
         factory.assert_called_once()
         self.assertEqual(self.d.modes, [arm.Mode.idle]*7)
         self.assertFalse(hub.presets.busy())
-        self.assertTrue(hub.presets.snapshot()['stop_confirmed'])
+        self.assertTrue(all(s['stop_confirmed'] for s in hub.presets.snapshot()['arms'].values()))
         driver.cleanup.assert_called_once()
 
     def test_leader_left_existing_owner(self):
@@ -214,7 +214,7 @@ class Tests(unittest.TestCase):
             if role != 'leader_left': return
             if not hub.presets.busy():
                 hub.presets.request('start', 'test-browser', 1, role)
-            elif hub.presets.snapshot()['mode'] == 'moving':
+            elif hub.presets.snapshot()['arms'][role]['mode'] == 'moving':
                 hub.stop.set()
         def move(target, duration, blocking):
             """Command. Apply fake target and end the owner loop after its main trajectory."""
@@ -228,7 +228,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(factory.call_count, 2)
         self.assertEqual(self.d.modes, [arm.Mode.idle]*7)
         self.assertFalse(hub.presets.busy())
-        self.assertTrue(hub.presets.snapshot()['stop_confirmed'])
+        self.assertTrue(all(s['stop_confirmed'] for s in hub.presets.snapshot()['arms'].values()))
         self.assertEqual(driver.cleanup.call_count, 2)
 
     def test_atomic_reservation(self):

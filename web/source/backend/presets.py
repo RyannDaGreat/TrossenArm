@@ -69,10 +69,10 @@ class Presets:
         with self.lock:
             return {**self.state, "available": sorted(self.available)}
 
-    def busy(self):
+    def busy(self, side=None):
         """Query. Report ownership, including an unresolved stop."""
         with self.lock:
-            return self.state["role"] is not None
+            return self.state["role"] is not None and (side is None or self.state["role"].endswith("_"+side))
 
     def request(self, action, client, sequence, role=None):
         """
@@ -90,8 +90,6 @@ class Presets:
                 if role not in ROLES:
                     raise ValueError("Unknown arm role")
                 pair = self.pairs.get(role.rsplit("_", 1)[-1], self.pair).snapshot()
-                if any(p.enabled or p.stop_pending or p.state["active"] is not False for p in self.pairs.values()):
-                    raise ValueError("Stop puppet mode before starting a preset")
                 if self.busy() or pair["enabled"] or pair["stop_pending"] or pair["active"] is not False:
                     raise ValueError("Stop the current control mode before starting a preset")
                 if role not in self.available or (pair["mode"] != "ready"):
@@ -221,3 +219,60 @@ class Presets:
             self.halt(role, sdk, str(reason))
         except ValueError as error:
             self.halt(role, sdk, str(error))
+
+
+class PresetGroup:
+    """Four independent preset sessions sharing the pair reservation lock."""
+
+    def __init__(self, stop):
+        """Command. Allocate intent only; existing threads retain SDK ownership."""
+        self.stop, self.lock = stop, threading.RLock()
+        self.pair, self.pairs = None, {}
+        self.sessions = {role: Presets(stop) for role in ROLES}
+        for session in self.sessions.values():
+            session.lock = self.lock
+
+    def snapshot(self):
+        """Query. Return per-arm progress, stop confirmation, and availability."""
+        with self.lock:
+            states = {role: session.snapshot() for role, session in self.sessions.items()}
+            return {"arms": states, "available": [role for role, state in states.items() if role in state["available"]]}
+
+    def busy(self, side=None):
+        """Query. Reserve only the selected pair, or report any reservation."""
+        with self.lock:
+            return any(session.busy(side) for session in self.sessions.values())
+
+    def request(self, action, client, sequence, role=None):
+        """Command. Route ordered intent to an explicit arm; reject ambiguous old clients."""
+        with self.lock:
+            if role is None:
+                owned = [name for name, session in self.sessions.items() if session.client == client and session.busy()]
+                if len(owned) != 1:
+                    raise ValueError("Choose which arm to control")
+                role = owned[0]
+            if role not in self.sessions:
+                raise ValueError("Unknown arm role")
+            session = self.sessions[role]
+            session.pair, session.pairs = self.pair, self.pairs
+            session.request(action, client, sequence, role)
+
+    def connected(self, role):
+        """Command. Mark one arm connected without changing its neighbors."""
+        self.sessions[role].connected(role)
+
+    def unavailable(self, role, error):
+        """Command. Retain uncertainty for the failed arm only."""
+        self.sessions[role].unavailable(role, error)
+
+    def confirm_halted(self, role, error=None):
+        """Command. Release an arm only after its owner verifies idle."""
+        self.sessions[role].confirm_halted(role, error)
+
+    def halt(self, role, sdk, error=None):
+        """Command. Stop through the existing owner of this arm."""
+        self.sessions[role].halt(role, sdk, error)
+
+    def tick(self, role, sdk):
+        """Command. Advance only this arm's independent eight-second move."""
+        self.sessions[role].tick(role, sdk)

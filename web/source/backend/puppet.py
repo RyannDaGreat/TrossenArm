@@ -94,12 +94,8 @@ class LeftPair:
         Returns: None; request('stop', token, 4) latches a stop until the owner confirms idle.
         """
         with self.lock:
-            if action == "arm" and self.presets:
-                for pair in self.presets.pairs.values():
-                    if pair is not self and (pair.enabled or pair.stop_pending or pair.state["active"] is not False):
-                        raise ValueError("Stop the other puppet pair first")
-            if action == "arm" and self.presets and self.presets.busy():
-                raise ValueError("Stop the preset before enabling puppet mode")
+            if action == "arm" and self.presets and self.presets.busy(self.side):
+                raise ValueError(f"Wait for {self.side} Up movements to finish before starting puppet mode")
             if self.state["mode"] in ("connecting", "fault", "stop_unconfirmed", "stopped"):
                 raise ValueError(self.state["error"] or "Pair not ready")
             if self.stop_pending:

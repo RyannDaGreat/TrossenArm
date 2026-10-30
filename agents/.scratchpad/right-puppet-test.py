@@ -13,7 +13,6 @@ right=puppet.LeftPair(shared.stop,Mock(),shared,side='right')
 shared.pairs={'left':left,'right':right};shared.pair=left
 for p in (left,right):p.set_state(mode='ready')
 right.request('arm','right-test',1)
-try:left.request('arm','left-test',1)
-except ValueError:pass
-else:raise AssertionError('Both pairs reserved motion')
-print('PASS: shared reservation excludes overlapping left/right engagements.')
+left.request('arm','left-test',1)
+assert left.enabled and right.enabled
+print('PASS: distinct pairs reserve their own arms concurrently.')

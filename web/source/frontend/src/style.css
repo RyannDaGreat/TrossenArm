@@ -91,8 +91,13 @@ button:focus-visible { outline: var(--rule) solid var(--red); outline-offset: va
 :root { --stop-layer: 2; }
 .control-modal > .stop-control { position: sticky; top: 0; z-index: var(--stop-layer); }
 
-.preset-section > summary { cursor: pointer; }
-.preset-section[open] > summary span { font-size: 0; }
-.preset-section[open] > summary span::after { content: "4 arms / 8 seconds · collapse"; font-size: var(--small); }
 .puppet-card .switch-row { flex-wrap: wrap; margin-top: var(--space-md); }
 .puppet-card .switch-row > span { flex: 1; font-size: var(--small); }
+.preset-section > summary, .puppet-section > summary { cursor: pointer; list-style: none; }
+.section-title::-webkit-details-marker { display: none; }
+.section-title .section-chevron { display: inline-block; font-size: var(--section); margin-left: var(--space-sm); }
+details[open] > summary .section-chevron { transform: rotate(90deg); }
+.arm-preset .preset-card { width: var(--full); }
+.arm-preset progress { width: var(--full); accent-color: var(--ink); margin-top: var(--space-md); }
+.arm-stop { width: var(--full); padding: var(--space-sm); }
+.preset-card.moving:disabled { opacity: 1; }

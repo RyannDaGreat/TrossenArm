@@ -75,9 +75,9 @@
 - [ ] Operator-driven right-pair copying trial (software and connections verified; no automatic following).
 
 - [x] Replace puppet dropdown with two visible illustrated cards; verified both routes, stopwatch, stopping and mobile layout.
-- [ ] Add state chevrons to both control sections and keep puppet initially expanded.
+- [x] State chevrons on both sections; puppet initially expanded.
 - [ ] Show actual right-pair engagement rejection instead of the secondary heartbeat error; verify via intercepted browser requests.
-- [ ] Start Vite frontend against existing backend without restarting hardware.
+- [x] Vite43179 serves frontend and proxies cameras/API to backend28347.
 - [x] Independent puppet pairs and per-arm Up controllers; concurrent mocked owner tests passed.
 - [x] Independent UI sessions and per-arm progress; isolated browser validation passed; source staged outside live Vite tree.
-- [ ] Deploy concurrency changes during an authorized idle handoff; do not restart the current server.
+- [x] User authorized one restart after upright reset; all four reset/verified, updated controller and canonical UI deployed.

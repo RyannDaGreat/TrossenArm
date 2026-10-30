@@ -109,6 +109,12 @@ class Tests(unittest.TestCase):
             if method == 'get_arm_positions': self.clock += 0.2
         self.d.hook = delay; self.tick()
         self.assertIn('deadline', self.p.snapshot()['error'])
+        self.d.hook = None
+        self.request('start'); self.tick()
+        self.d.hook = delay
+        self.tick()
+        self.assertIn('deadline', self.p.snapshot()['error'])
+        self.assertFalse(self.p.busy())
     def test_wrong_owner_and_stale_requests(self):
         """Command. Ensure other owners cannot execute or steal a queued preset."""
         self.request('start'); self.p.tick('follower_right', self.d.call)

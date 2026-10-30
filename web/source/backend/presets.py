@@ -174,6 +174,7 @@ class Presets:
             if len(positions) != 6 or len(velocity) != 6 or not all(math.isfinite(v) for v in positions+velocity):
                 raise ValueError("Invalid preset feedback")
             modes = list(sdk("get_modes"))
+            self.require_intent(generation, now)
             if self.started is None:
                 if modes != [arm.Mode.idle]*7 or max(map(abs, velocity)) > STATIONARY_SPEED_RAD_S:
                     raise ValueError("Preset needs seven idle modes and a stationary arm")

@@ -81,3 +81,9 @@
 - [x] Independent puppet pairs and per-arm Up controllers; concurrent mocked owner tests passed.
 - [x] Independent UI sessions and per-arm progress; isolated browser validation passed; source staged outside live Vite tree.
 - [x] User authorized one restart after upright reset; all four reset/verified, updated controller and canonical UI deployed.
+
+- [ ] Restart server after operator power-cycled right arms; verify fresh connections without motion.
+- [ ] Establish vendor and intended resting poses before implementing illustrated Rest controls; background investigation active.
+- [x] Power-cycle recovery restart complete: PID62919, all four arms fresh/idle/noerror, four cameras fresh. Rest-pose definition remains under investigation.
+- [x] Fix Up targets to align each pair's base encoder angles; fourteen preset tests and concurrent owner regressions passed.
+- [ ] Deploy base-aligned Up after backend restart authorization; verify fresh ready state without automatic motion.

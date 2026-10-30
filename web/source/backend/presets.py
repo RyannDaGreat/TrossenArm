@@ -41,6 +41,32 @@ def tall_target(current, bounds):
     return target
 
 
+# Previously visually aligned follower headings; leaders share encoder angles for copying.
+UP_BASE_RADIANS = {"left": math.radians(91.2), "right": math.radians(-87.6)}
+
+
+def up_target(role, current, bounds):
+    """
+    Pure function. Prepare a tall pose with the matching pair's standard base angle.
+
+    Args: role: known arm role; current: six radians; bounds: six factory intervals.
+    Returns: Six angles, including a common base target for each leader/follower pair.
+    Examples:
+        >>> bounds = [(-math.pi, math.pi)]*2 + [(0, 2.356194496)] + [(-math.pi, math.pi)]*3
+        >>> a = up_target("leader_right", [0]*6, bounds)
+        >>> b = up_target("follower_right", [-2, 0, 0, 0, 0, 0], bounds)
+        >>> a == b, round(math.degrees(a[0]), 1)
+        (True, -87.6)
+    """
+    if role not in ROLES:
+        raise ValueError("Unknown arm role")
+    target = tall_target(current, bounds)
+    target[0] = UP_BASE_RADIANS[role.rsplit("_", 1)[1]]
+    if not bounds[0][0] <= target[0] <= bounds[0][1]:
+        raise ValueError("Up base heading does not fit the current factory limits")
+    return target
+
+
 class Released(Exception):
     """Expected stop or loss of live browser intent."""
 
@@ -62,7 +88,7 @@ class Presets:
         self.started = None
         self.target = None
         self.state = dict(mode="ready", role=None, active=False, stop_confirmed=True,
-                          error=None, remaining_s=0, heading="Keep base yaw; reset wrists and open gripper")
+                          error=None, remaining_s=0, heading="Align pair base angles; reset wrists and open gripper")
 
     def snapshot(self):
         """Query. Return visible state and connected arm roles."""
@@ -188,7 +214,7 @@ class Presets:
                 reference = [max(lo, min(q, hi)) for q, (lo, hi) in zip(positions, bounds)]
                 if len(reference) != 7 or max(abs(a-b) for a, b in zip(reference, positions)) > INITIAL_OFFSET_RAD:
                     raise ValueError("Arm outside nominal bounds; supervised alignment required")
-                self.target = tall_target(reference[:6], bounds[:6]) + [bounds[6][1]]
+                self.target = up_target(role, reference[:6], bounds[:6]) + [bounds[6][1]]
                 self.velocity_bounds = [limit.velocity_max + limit.velocity_tolerance for limit in limits]
                 self.require_intent(generation, now)
                 sdk("set_all_modes", arm.Mode.position)

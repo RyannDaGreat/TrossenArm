@@ -242,7 +242,7 @@ class LeftPair:
             if any(abs(a-b) > UPRIGHT_TOLERANCE_RAD for a,b in zip(values[1:6], upright[1:6])) or abs(values[6]-own_bounds[6][1]) > 0.002:
                 raise StartNotReady(f"Use Up on both {self.side} arms first: upright, wrists reset, grippers open")
         if any(abs(a-b) > ALIGNMENT_TOLERANCE_RAD for a,b in zip(leader_ref[:6], raw[:6])):
-            raise StartNotReady(f"Align the {self.side} base headings before enabling puppet mode")
+            raise StartNotReady(f"Use Up on BOTH {self.side} arms to match base angles before enabling puppet mode")
         self.speeds = [min(SPEED_RAD_S if i < 6 else GRIPPER_SPEED_M_S, limit.velocity_max) for i,limit in enumerate(limits)]
         self.feedback_bounds = [(v.position_min-v.position_tolerance, v.position_max+v.position_tolerance) for v in limits]
         self.velocity_bounds = [v.velocity_max+v.velocity_tolerance for v in limits]

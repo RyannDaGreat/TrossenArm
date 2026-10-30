@@ -5,7 +5,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, extname } from 'node:path';
 const require = createRequire(new URL('../../web/source/frontend/package.json', import.meta.url));
 const puppeteer = require('puppeteer-core');
-const root = resolve('agents/.scratchpad/independent-ui/frontend/dist');
+const root = resolve('web/source/frontend/dist');
 const server = createServer(async (request, response) => {
   try {
     assert.equal(request.method, 'GET', 'Static test server must never receive motor POSTs');

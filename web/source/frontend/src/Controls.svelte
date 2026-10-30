@@ -119,7 +119,7 @@
         <button class="preset-card" class:moving={busy(choice.role)} disabled={blocked(choice.role)} onclick={() => start(choice.role)} aria-label={choice.title}>
           <span class="preset-index">{choice.number} / {choice.role.endsWith('left') ? 'LEFT' : 'RIGHT'}</span>
           <svg viewBox="0 0 160 150" aria-hidden="true"><path class="preset-guide" d="M25 125H135M80 15V120M70 25L80 15L90 25"/><path class="preset-arm" d="M55 125H105M80 125V96L69 63L80 36V21M71 13V21H89V13"/><circle cx="80" cy="96" r="5"/><circle cx="69" cy="63" r="5"/><circle cx="80" cy="36" r="4"/></svg>
-          <strong>{choice.title} <span>↑</span></strong><small>Tall pose · keeps current heading</small>
+          <strong>{choice.title} <span>↑</span></strong><small>Tall pose · {stateFor(choice.role)?.heading?.startsWith('Align') ? 'aligns pair bases' : 'keeps current heading'}</small>
           {#if busy(choice.role)}<progress max="8" value={Math.max(0, 8-(stateFor(choice.role)?.remaining_s ?? 8))} aria-label={`${choice.title} progress`}></progress><small>{stateFor(choice.role)?.mode === 'stopping' ? 'Stopping…' : `${Math.ceil(stateFor(choice.role)?.remaining_s ?? 8)} seconds remaining`}</small>{/if}
         </button>
         {#if busy(choice.role)}<button class="arm-stop" onclick={() => stopOne(choice.role)} aria-label={`Stop ${choice.title}`}>Stop this arm</button>{/if}
@@ -153,7 +153,7 @@
   </details>
   <details class="limit-details"><summary>Movement limits and stopping</summary>
     <p class="notice">Both puppet pairs can follow at once. Up moves are independent; stop the matching puppet pair before raising either of its arms. Each card stops its own movement. STOP MOVEMENT, closing this panel, leaving the page, or losing focus stops all channels. Each channel also stops when its browser heartbeat expires.</p>
-    <p class="notice">Click a pair’s stopwatch to remove its 60-second session limit. Puppet mode approaches your hand position at up to 29°/s and 20 mm/s gripper speed, within controller limits. Up preserves base heading, resets the wrists, and opens the gripper.</p>
+    <p class="notice">Click a pair’s stopwatch to remove its 60-second session limit. Puppet mode approaches your hand position at up to 29°/s and 20 mm/s gripper speed, within controller limits. Up resets the wrists and opens the gripper. {presets?.arms?.follower_right?.heading?.startsWith('Align') ? 'It also sets matching base angles for each pair.' : 'The running controller still preserves base heading; Up cannot correct a base mismatch until the controller update is loaded.'}</p>
     <p class="notice">These controls do not detect obstacles. Use the physical power stop if idle cannot be confirmed.</p>
   </details>
 </dialog>

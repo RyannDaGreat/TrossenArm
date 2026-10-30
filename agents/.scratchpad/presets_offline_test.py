@@ -73,7 +73,7 @@ class Tests(unittest.TestCase):
         self.request('start'); self.tick()
         target = self.p.target
         self.assertEqual(target[6], 0.04)
-        self.assertEqual((target[0], target[5]), (0.2, 0.0))
+        self.assertEqual((target[0], target[5]), (presets.UP_BASE_RADIANS["left"], 0.0))
         _, tool = forward(target[:6])
         self.assertAlmostEqual(tool[2, 3], 0.853447555, places=7)
         self.assertAlmostEqual(tool[2, 0], 1)

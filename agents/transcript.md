@@ -211,3 +211,25 @@ Editorial note: The trailing “Yes, I am working on both tasks in parallel” r
 The following instructions accompanied the delayed-camera check, parallel-work question, montage, upright-song request, web-interface request, web-layout request, phone-notification request, scan/leader question, and left-pair request:
 
 > Reply in chat first as you would normally. Then speak in pure English via `(curl -s -d 'YOUR_MESSAGE_HERE' ntfy.sh/stark_comma > /dev/null &)`, only 1–2 sentences unless asked for more, as it will be played as audio. This will be read out loud to a human, so keep it from being too verbose. “Notify me” refers to `rp call ntfy_send [message]` and “talk to me” refers to speaking with the above curl command. They're not the same.
+
+## 2026-10-29 — new computer demonstration
+
+User: "Try running the web UI. Open my browser once you get it working, but first make sure all the webcams are connected and work properly. See if you can make the robot arms twitch their fingers a little bit and record some videos of that. Make maybe two of the robot arms stand up and [crowd] towards the sky. Try to do this in a timely manner. You already have the code buttons in the scratchpad. It was on another computer, so I plugged things in a little differently. Hopefully the ID searches compensate. Once you're done and the robot is up in the sky, say Yankee Doodle out loud on the speakers."
+
+User: "Reply in chat first as you would normally. Then speak in pure English via curl to ntfy.sh/shine_rut, only one or two sentences unless asked for more. Don't talk to me until you've completed your task."
+
+User: "Every time you speak to me, your name will be Marvin. Announce your name before every time you talk."
+
+User: "I don't know why you're being so cautious. There's nothing in the way at all. You moved so slowly. Can you do the left arm, decently fast, maybe three times faster than that one?"
+
+User: "You shouldn't have to look things up if they're already here. Put new documentation somewhere you won't forget it offline. If existing documentation is buried in obscure folders, fix the organization. Have a sub-agent work on that if it's a problem. Otherwise continue."
+
+User: "Leader right is 1.2, follower right is 1.4, leader left is 1.3, follower left is 1.5."
+
+User: "Both arms are kind of in an L shape. They don't look loud and proud and high, rising as high as they can go."
+
+User: "The duck's beak defines north, the direction the fixed cameras point. Use north, east, south, west, and vertical up separately. Do you know which cardinal directions the arms' L shapes point? Can you align them north by rotating the bases?"
+
+User: "Don't slow down the height task. Get the arms high and tall as fast as possible; have a sub-agent work out the cardinal directions meanwhile."
+
+User: "Explain out loud why the arm keeps pausing and moving bit by bit when nothing is next to it. Is it because you don't know how the robot moves?"

@@ -1,8 +1,12 @@
 # Goal and current state
 
+North turn execution: stock wrist-camera geometry and north-wall junction estimates place local north at approximately +91.2° left and −87.6° right. Use these approximate bearings for one continuous eight-second base turn per follower, preserve current shoulder/elbow/pitch, and bring tool roll to zero so both wrists share the same orientation. This is visual compass alignment, not precision calibration. Inspect fresh pre/post camera images and encoder/error readbacks; unchanged factory bounds and single hardware owner apply. Evidence and assumptions: `agents/.scratchpad/cardinal-findings.md`, pinned stock URDF and wall-line analysis in `agents/.scratchpad/cardinal-assets/`.
+
 Control and observe four Trossen WXAI arms from this portable Git project. Keep robot identity, hardware ownership, current geometry, and measured camera performance explicit. Never infer collision clearance or metric room coordinates from uncalibrated camera images.
 
-**Shutdown checkpoint:** the user is turning off the laptop. The server and all camera/robot jobs have been stopped; do not automatically resume motion or following next session. Start the viewer explicitly with `web/run-the-server.sh` at http://127.0.0.1:28347 after reconnecting and checking current hardware. It owns four cameras, two right-arm read-only drivers, and one left-pair telemetry/control owner. Never issue competing driver commands.
+**Current result:** both followers reached the locally derived maximum-height pose within existing nominal joint limits, about 0.85345 m above their own bases. Left used four observed 8/3-second stages; right completed one continuous eight-second move. Both ended idle/no error. Post-idle heights were left0.85278 m and right0.85302 m. Earlier bent poses did not meet the user's intended height and are historical evidence only. Both bases now face approximate duck north (+91.2° left, −87.6° right); both tool rolls are zero. Post-turn wrist images show the north wall level. This is visual alignment, not precision calibration. The two-view recorder is `agents/.scratchpad/record_two_views.py`; `scratchpad.py` is the disposable offline height study.
+
+Do not auto-enable following. The viewer owns four cameras and all robot telemetry drivers; stop it before standalone motor scripts and confirm the previous owner has exited. Never issue competing driver commands. AX88179A/en8 is configured and verified at 192.168.1.100/24.
 
 **Verified:** four live camera feeds, live encoder-driven geometry for all four arms, right-follower small/full gripper cycles, and a staged sky-facing right-follower pose. The dashboard was tested with Puppeteer, visually inspected, opened in the browser, and announced through both channels. A 20-second browser test measured approximately 30 drawn frames/second for each camera; exact results are in `agents/.scratchpad/web-verification.json`. This is not a long-duration soak or exposure-to-screen latency certification.
 
@@ -13,6 +17,7 @@ Control and observe four Trossen WXAI arms from this portable Git project. Keep 
 - Dump: self-contained, movable Git project, with no dependency on its absolute location.
 - Leader: finger-handle arm used as operator input. Follower: corresponding output arm.
 - SDK: vendor device-control interface. UVC: standard USB camera interface.
+- Nominal bounds: minimum/maximum positions accepted as motor targets. Feedback tolerance: additional measured-position allowance around those bounds before the controller reports a fault; it does not extend the permitted targets.
 - VLM: the assistant's visual inspection of real captured images/video frames.
 - Idle: vendor braking state, not electrical power off or guaranteed exact position hold.
 - FK: forward kinematics; joint angles transformed into link/tool geometry.
@@ -23,6 +28,37 @@ Control and observe four Trossen WXAI arms from this portable Git project. Keep 
 - Autopilot: make routine decisions without unnecessary blocking. Bulldog: persist without bypassing safety. Babysitting: monitor ongoing work until stopped. Ponytail: smallest complete, checked implementation.
 - Glossary: definitions of project-specific terms.
 
+# Offline reference — start here
+
+Read this index and search the listed local source before using the internet. Keep newly learned behavior, source version, and local evidence in this manifest; keep mistakes and superseded interpretations in `agents/concerns.md`. Use the internet for facts missing from the local material or for a deliberate version check. Paths below are relative to the Git root. The vendor checkout is `agents/.scratchpad/trossen_arm/`, verified tag `v1.8.8`, revision `084ef0a74d3e6b71d640ac9907e4b48e04efcdcf`; its recreation command is in Reproducibility and verification.
+
+| Question | Local source and entry point |
+| --- | --- |
+| What is a command bound versus a feedback tolerance? | `agents/.scratchpad/trossen_arm/docs/getting_started/configuration.rst`, Joint Limits, lines 418–427; `agents/.scratchpad/trossen_arm/include/libtrossen_arm/trossen_arm_type.hpp`, `JointLimit`, lines 136–152 |
+| What units, duration, and modes does the SDK accept? | `agents/.scratchpad/trossen_arm/include/libtrossen_arm/trossen_arm.hpp`, `set_arm_positions` around line 129, `set_joint_modes` around line 601, `set_arm_modes` around line 637 |
+| What are this connected arm's actual limits and pose? | `agents/.scratchpad/prepare_upright.py`; recorded left-follower check: `agents/.scratchpad/logs/left-preflight-20261029.log`. Requires exclusive SDK ownership; never run alongside the viewer. |
+| How are changed USB ports and camera identities handled? | `web/source/backend/robot_camera.py`: `mac_usb_serials`, `discover`, `select_camera`; `web/source/backend/server.py`: `SERIAL_ROLES`, `assign_roles`; `agents/.scratchpad/usb_identity_probe.py` for raw local USB identity records |
+| How do I inspect cameras or record without rediscovering the approach? | Running viewer: `/api/status` and `/api/camera/{role}/snapshot.jpg`. Standalone scripts: `agents/.scratchpad/preview_cameras.py`, `camera_montage.py`, and `scratchpad.py` (two-view 640×480 recording; live gripper opt-in). The preview script's 1280×720 default failed on this Mac; use the verified 640×480 profile. |
+| How are staged poses executed and checked? | `agents/.scratchpad/raise_arm.py`, `upright_offline_test.py`; per-arm plans, approvals, snapshots, and measured status under `agents/.scratchpad/<role>-motion/` |
+| Where are geometry and fault behavior documented? | `agents/.scratchpad/trossen_arm/docs/specifications.rst`, `docs/troubleshooting.rst`; implementation: `web/source/backend/geometry.py` |
+| How do I verify the existing UI without touching motors? | `agents/.scratchpad/verify_web.mjs`; saved `web-verification.json` and `web-viewer.png`. `verify_controls.mjs` mocks all control POSTs. |
+
+## Joint-limit facts needed for the current lift
+
+The local v1.8.8 configuration document distinguishes **command clipping** from **feedback fault checks**. Position commands are clipped to `min(max(command, position_min), position_max)`. Measured position is checked against `position_min - position_tolerance` and `position_max + position_tolerance`. Header units are radians for arm position/tolerance and radians per second for arm velocity. A feedback reading outside nominal bounds alone is insufficient to diagnose a limit fault; inspect the configured tolerance and controller error. Tolerance is not permission to send targets outside nominal bounds or proof of collision clearance.
+
+Actual left-follower readback at 2026-10-29 20:56:42 (`left-preflight-20261029.log`):
+
+| Quantity | Measured/configured value |
+| --- | --- |
+| Wrist yaw / nominal maximum | 1.6397726536 / 1.5707963705 rad; excess 0.0689762831 rad, about 3.95° |
+| Position tolerance, joints 0–2 | 0.200000003 rad |
+| Position tolerance, wrist joints 3–5 | 0.400000006 rad |
+| Velocity maximum, joints 0–2 | 6.283185482 rad/s |
+| Velocity maximum, wrist joints 3–5 | 9.424777985 rad/s |
+
+This wrist reading is inside the existing feedback allowance. The authorized lift uses a two-second initial target explicitly clamped to nominal bounds, then four quarter-waypoints toward `[starting yaw, π/2, 1.7, π−1.7, 0, starting roll]`. `TROSSEN_STAGE_SECONDS` selects the stage duration, bounded to 8/3 through 8 seconds; gripper stays idle, each stage is observed, and errors trigger cleanup. No factory limit or tolerance is widened. These recorded numbers are evidence for this readback, not defaults to assume for another arm or after reconfiguration. They also do not alter the separate, stricter puppeteering trial guards.
+
 # Requirements and workflow
 
 All actual human inputs belong in `agents/transcript.md`, near-verbatim with obvious dictation artifacts/stutters removed, no semantic reinterpretation, and unclear words marked. Keep editorial notes outside quotations. The transcript is the record of user ideas; this manifest also includes explicitly identified implementation decisions.
@@ -31,9 +67,9 @@ All actual human inputs belong in `agents/transcript.md`, near-verbatim with obv
 - Experiments and evidence stay under `agents/.scratchpad/`. The user explicitly requested promotion of the web app into `web/`.
 - Root `pyproject.toml` and `uv.lock`; **Python and dependencies through `uv run` only. Never any pip-install command.** Keep generated environments/caches inside the dump, ignored and recreated after moving it.
 - Orthogonal commits using `[P]` prefix; no push unless requested. User made initial commit `9b25ae3`.
-- Active modes: AUTOPILOT, BULLDOG, BABYSITTING, PONYTAIL. Do not repeat physical actions merely because a monitoring timer fires.
+- This session requests a timely finite hardware demonstration. Historical session modes do not auto-enable following or repeated motion.
 - No unnecessary intermediate speech. Answer direct status questions. Report verified outcomes and genuine terminal blockers, not setup milestones as completed tasks.
-- Speak in brief English through `https://ntfy.sh/stark_comma`; every spoken message also gets the same phone update through `rp call ntfy_send --- 'message'`. Use `uv run --extra robot --with rp --with requests rp call ...` so RP cannot prompt for pip installation. Keep command output visible. Song requests use public-domain or original material, not unprovided copyrighted song lyrics.
+- Current speech instruction: chat first, then speak one or two English sentences through `https://ntfy.sh/shine_rut` only after completing the task. Say Yankee Doodle after verified raised arms. No intermediate speech or old-topic delivery.
 - Concise functions, explicit CQS classification and examples, documented image/tensor shapes, meaningful error reports. No silent runtime fallback. Use einx for applicable tensor operations. All CSS component sizes/colors use root custom properties.
 - No absolute project paths stored in code. Derive the Git/project root at runtime. Windows/Linux camera adapters are mock-tested; only this Mac has real hardware verification.
 
@@ -48,7 +84,7 @@ All actual human inputs belong in `agents/transcript.md`, near-verbatim with obv
 
 Controllers report `wxai_v0`, firmware `1.8.4`; use driver `trossen-arm==1.8.8` (matching minor version), Python 3.12. The vendor core is a precompiled binary, not audited implementation source. Do not upgrade firmware merely to match a newer package.
 
-Current nested-adapter setup: AX88179A network service on `en11`, manual `192.168.1.100/24`, no router. Wi-Fi and VPN remain unchanged. The earlier TP-Link `en9` connection is historical evidence in `agents/.scratchpad/logs/connectivity.log`; do not reuse its service name blindly. Discover service/interface identity before configuring a new host. The current right-follower route/ping check succeeded after `networksetup -setmanual AX88179A 192.168.1.100 255.255.255.0`.
+Current setup: AX88179A network service on `en8`, manual `192.168.1.100/24`, no router. Wi-Fi and VPN remain unchanged. Discover service/interface identity before configuring a new host. The current right-follower route/ping check succeeded after `networksetup -setmanual AX88179A 192.168.1.100 255.255.255.0`.
 
 Reachability and a label do not alone certify physical identity, mounting, or clearance. The user reports a visual safety check and has separately authorized gripper, upright follower, leader, and left-pair puppeteering work. Scope those permissions to the requested tasks, not arbitrary scans.
 
@@ -148,3 +184,33 @@ Official repository: https://github.com/TrossenRobotics/trossen_arm ; ignored lo
 # Semantic Bindings
 
 None.
+
+# Current-session demonstration details
+
+The current left-follower request and verified limit interpretation are defined near the top in Goal and current state and Offline reference. Do not widen limits, clear faults, or activate beyond factory feedback tolerance. Keep one driver owner and inspect stage images.
+
+Use explicit 640x480 capture for recordings and staged snapshots on this Mac. Reuse the existing guarded gripper exercise when gripper motion is requested; no intermediate speech and no unknown-fault clearing. This lift targets only the left follower; leave the leaders unchanged. Prefix every user-facing message and eventual speech with Marvin.
+
+## Verified outcome on 2026-10-29
+
+All four cameras delivered live 640x480 video at approximately 30 fps on the new Mac. Browser test passed; four robots reported ready/idle. Two right-follower gripper cycles were measured and visually checked, saved in agents/.scratchpad/gripper-right-20261029-205125.mp4 and gripper-top-20261029-205125.mp4 (574 frames each). Four observed right-follower lift stages completed: final tool XYZ [0.233651,-0.103001,0.711266] m, forward [0.000645,0.000341,0.9999997], final seven idle modes and no error. Stage images and status are in agents/.scratchpad/follower_right-motion/.
+
+The left follower then completed all four 2.6666667-second stages with unchanged limits. Final measured joints were [0.7932783961,1.5543221235,1.7000458241,1.4417868853,-0.00171663996,0.00133516442]; tool XYZ [0.1717265173,0.1749072955,0.7151307443] m and forward [-0.0129481,-0.0107067,0.9998588468]. All seven joints finished idle with No error. The top image visually confirmed both followers raised. Evidence: agents/.scratchpad/follower_left-motion/upright-status.json, upright-stage-{0..4}-{top,bottom}.png, and agents/.scratchpad/logs/upright-left-20261029.log. Restore the web viewer as the single hardware owner after standalone motion exits. No automatic following.
+
+After braking, measured idle drift reduced left tool height to 0.67395046 m (forward Z 0.9904169) and right height to 0.6919077 m (forward Z 0.997793). Both remained raised, idle, and error-free; stage endpoint coordinates are not an exact held pose. The viewer was restarted with all four feeds near 30 fps and opened at a fresh browser URL.
+
+## Tallest upward follower target
+
+Local DH geometry gives z = 0.1035 + a sin(s) + b sin(A-s) + 0.06775 + 0.02895 + 0.156062 when the final links/tool are vertical, where a=0.264 m, b=hypot(0.245,0.06) m, A=e+atan2(0.06,0.245), s=shoulder and e=elbow. For fixed e, maximize with s=atan2(a-b cos(A), b sin(A)). Over the configured elbow range [0, 3π/4], maximum height increases with e, so use the unchanged nominal elbow maximum; wrist pitch is s+π/2-e and wrist yaw is zero. Preserve base yaw/tool roll. Expected target is shoulder1.3045514, elbow2.3561945, wrist pitch0.5191532 rad; tool height0.8534476 m and horizontal radius0.020 m. This is the kinematic height maximum for this model and configuration, not permission to bypass clearance checks or change limits. Use distinct <role>-tall-motion runtime folders to preserve earlier pose evidence. Verify actual feedback and final views; idle may drift.
+
+The user objects to repeated pauses and confirms the workspace is empty. For the already model-checked tall-pose transition, allow one continuous eight-second joint-space move, with initial/final camera inspection and the existing 20 Hz controller/error/stop checks. This avoids artificial stops at quarter-waypoints without widening limits or increasing motor limits. `TROSSEN_CONTINUOUS=1` in preparation selects fractions=[1.0]; runtime duration remains explicitly bounded. Unknown base-yaw registration is a separate issue and must not delay completing height changes at unchanged yaw.
+
+## Duck-defined cardinal directions
+
+North is the duck's beak direction, toward the wall/rear crossbar and top of the fixed-camera image. East is image-right/right-follower side; south is toward the fixed cameras/front table edge; west is image-left/left-follower side. Vertical up is separate. Verified from left-tall stage0 top/bottom images: orange beak at image top and duck's back facing bottom camera. Qualitative image directions are not a metric room calibration. Earlier arms had opposing inward lateral components; exact NE/NW labels are not verified because height affects projection. Separate local q0 frames have no verified compass offset; do not assume q0=0 means north. At tall pose, tool radial offset is only20 mm, and elbow lies on the opposite side; proposed facing convention is positive radial direction toward north. Wider fixed-camera coverage was requested because tall arms are now partly outside both fixed views. No base rotation has been performed for north alignment. Details/evidence: agents/.scratchpad/cardinal-findings.md.
+
+## Arm-up preset controls
+
+The operator wants a Swiss-style Robot controls panel with illustrated Left arm up and Right arm up actions alongside puppet mode. Use a clear grid, restrained colors, strong type hierarchy, concise labels and simple SVG arm diagrams. Record later design preferences here as they emerge. The presets raise a follower toward the validated tall pose in one eight-second interpolation, keeping its current base yaw and tool roll: encoder zero is not a verified north heading. Wrist yaw becomes zero for a vertical tool. A preset and puppet mode cannot own motion concurrently. Browser intent is ordered, expires after 0.5 seconds without heartbeat, and stops on blur, close or Stop. Only the existing SDK-owner thread writes motors. Limits stay unchanged; faults never auto-clear; uncertain stops remain explicit. Hardware behavior still requires a supervised live validation after offline tests.
+
+Implementation: `web/source/backend/presets.py` owns ordered preset intent; `LeftPair` and right-arm telemetry call it on their existing motor-owner threads. A shared reentrant lock makes puppet/preset reservations atomic. The pure tall-target function uses the actual elbow maximum and local WXAI DH dimensions; tests reproduce 0.853447555 m tool height. The modal has illustrated follower cards, a separate puppet row and a sticky Stop button. Offline checks: `agents/.scratchpad/presets_offline_test.py` (12 mocked tests plus geometry doctest) and `agents/.scratchpad/verify_presets.mjs` (isolated static fixture; every control POST intercepted). Build with the existing frontend npm script. No added dependencies.
